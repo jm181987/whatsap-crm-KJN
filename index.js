@@ -1,4 +1,6 @@
 import express from "express";
+import cors from 'cors';
+
 import {
   makeWASocket,
   useMultiFileAuthState,
@@ -2056,4 +2058,5 @@ server.listen(3000, () => {
   console.log("⏰ Sistema de recordatorios activo");
   console.log("📊 Dashboard en tiempo real activo"); // 👈 NUEVA LÍNEA
   iniciarWhatsApp();
+
 });
