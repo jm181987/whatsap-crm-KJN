@@ -18,6 +18,8 @@ import { Parser } from "json2csv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
+const cors = require('cors');
+app.use(cors());
 const server = http.createServer(app);
 
 app.use(express.json());
