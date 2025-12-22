@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM WhatsApp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      margin: 0;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      margin-bottom: 50px;
+    }
+    header {
+      background: #00ffc6;
+      color: #000;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    header h1 { 
+      margin: 0; 
+      font-size: 20px; 
+    }
+    #search { 
+      width: 200px; 
+      padding: 5px; 
+      border: none; 
+      border-radius: 5px; 
+      margin: 5px;
+    }
+
+    .kanban {
+      display: flex;
+      flex: 1;
+      overflow-x: auto;
+      padding: 10px;
+      gap: 10px;
+    }
+    .column {
+      background: rgba(255,255,255,0.07);
+      flex: 1;
+      min-width: 220px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      height: calc(100vh - 120px);
+      overflow-y: auto;
+    }
+    .column h2 {
+      text-align: center;
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    .cliente {
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 8px;
+      cursor: grab;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: 0.2s;
+    }
+    .cliente:hover { 
+      background: rgba(255,255,255,0.2); 
+    }
+    .nuevo { background-color: #00bcd4; }
+    .callback { background-color: #e3d922; }
+    .analista { background-color: #4caf50; }
+    .grupos { background-color: #9c27b0; }
+    .bloqueado { background-color: #e53935; }
+    .archivado { background-color: #d6d6d6; color:#000; }
+    .indicador {
+      width: 10px; 
+      height: 10px; 
+      border-radius: 50%; 
+      background: #ffeb3b;
+      margin-left: 5px; 
+      display: none;
+    }
+
+    #chat {
+      position: fixed; 
+      right: 0; 
+      top: 0; 
+      height: 95%;
+      width: 400px; 
+      background: #222; 
+      border-left: 2px solid #1e00ff;
+      display: none; 
+      flex-direction: column;
+      margin-bottom: 50px;
+      z-index: 1000;
+    }
+    #chat header {
+      background: #000dff; 
+      color: #ffffff; 
+      padding: 10px;
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+    }
+    #cerrarChat {
+      background: #333; 
+      color: #fff; 
+      border: none; 
+      font-size: 18px;
+      border-radius: 5px; 
+      cursor: pointer; 
+      padding: 0 8px;
+    }
+    #cerrarChat:hover { 
+      background: #555; 
+    }
+
+    .nota-box { 
+      background: #2f2f2f; 
+      margin: 10px; 
+      padding: 10px; 
+      border-radius: 8px; 
+    }
+    .nota-box h3 { 
+      margin-top: 0; 
+      font-size: 15px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+    }
+    #nota {
+      width: 100%; 
+      background: #333; 
+      color: #fff; 
+      border: none;
+      border-radius: 6px; 
+      padding: 6px; 
+      resize: vertical; 
+      min-height: 60px;
+    }
+    #nota[readonly] { 
+      opacity: 0.7; 
+      cursor: default; 
+    }
+
+    /* Estilos para recordatorios */
+    .recordatorios-box {
+      background: #2f2f2f;
+      margin: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border-left: 4px solid #ff9800;
+    }
+
+    .recordatorios-box h3 {
+      margin-top: 0;
+      font-size: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .recordatorios-box button {
+      background: #ff9800;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+
+    .recordatorios-box button:hover {
+      background: #f57c00;
+    }
+
+    .recordatorio-item {
+      transition: all 0.3s ease;
+    }
+
+    .recordatorio-item:hover {
+      background: rgba(255,255,255,0.15) !important;
+    }
+
+    /* Modal de notificación de recordatorio */
+    #modalNotificacionRecordatorio {
+      display: none;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: transparent;
+      z-index: 100000;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    #modalNotificacionRecordatorio .modal-contenido {
+      animation: slideInRight 0.3s ease;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .divider { 
+      border-top: 1px solid #444; 
+      margin: 8px 0; 
+    }
+
+    #mensajes { 
+      flex: 1; 
+      overflow-y: auto; 
+      padding: 10px; 
+      display: flex;
+      flex-direction: column;
+    }
+    .msg { 
+      margin: 5px 0; 
+      padding: 6px 10px; 
+      border-radius: 6px; 
+      max-width: 80%; 
+      word-wrap: break-word; 
+    }
+    .enviado { 
+      background: #ffffff; 
+      color: #000; 
+      align-self: flex-end; 
+    }
+    .recibido { 
+      background: #444; 
+      align-self: flex-start;
+    }
+
+    #enviar-area { 
+      display: flex; 
+      padding: 10px; 
+      gap: 5px; 
+      border-top: 1px solid #333; 
+    }
+    #texto { 
+      flex: 1; 
+      padding: 6px; 
+      border-radius: 5px; 
+      border: none; 
+    }
+    button { 
+      border: none; 
+      background: #00ffc6; 
+      color: #000; 
+      border-radius: 5px; 
+      cursor: pointer; 
+      padding: 6px 10px; 
+    }
+
+    .respuestas { 
+      padding: 10px; 
+      border-top: 1px solid #333; 
+      background: #2b2b2b; 
+      max-height: 200px; 
+      overflow-y: auto; 
+    }
+    .respuesta-item {
+      background: #444; 
+      margin: 4px 0; 
+      padding: 5px 8px; 
+      border-radius: 5px;
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      cursor: pointer;
+    }
+    .respuesta-item:hover { 
+      background: #555; 
+    }
+    .acciones button {
+      background: transparent; 
+      color: #00ffc6; 
+      border: none; 
+      cursor: pointer; 
+      font-size: 14px; 
+      margin-left: 5px;
+    }
+
+    #qrModal {
+      display:none; 
+      position:fixed; 
+      top:0; 
+      left:0; 
+      width:100%; 
+      height:100%;
+      background:rgba(0,0,0,0.85); 
+      align-items:center; 
+      justify-content:center;
+      z-index:9999; 
+      flex-direction:column; 
+      color:#fff;
+    }
+    #qrModal img { 
+      max-width:300px; 
+      border:5px solid #00ffc6; 
+      border-radius:10px; 
+      margin-top:10px; 
+    }
+
+    .alerta {
+      position: fixed;
+      top: 20px; 
+      right: 20px;
+      background: #ffffff;
+      color: #000;
+      padding: 10px 15px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #00ffc6;
+      animation: aparecer 0.3s ease;
+      z-index: 9999;
+    }
+    
+    #crm-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #0e0e0e;
+      color: #00ffc6;
+      text-align: center;
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      padding: 6px 0;
+      border-top: 1px solid #00ffc6;
+      z-index: 9999;
+    }
+
+    #crm-footer p {
+      margin: 0;
+    }
+    
+    @keyframes aparecer {
+      from { 
+        opacity: 0; 
+        transform: translateY(-10px); 
+      }
+      to { 
+        opacity: 1; 
+        transform: translateY(0); 
+      }
+    }
+
+    /* Modales para gestión de contactos */
+    #modalSubirContactos, #modalEnviarLista, #modalRecordatorio, #modalNotificacionRecordatorio {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 99999;
+    }
+
+    #btnSubirContactos, #btnEnviarLista {
+      margin: 0 5px;
+      background: #ff9800;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    #btnSubirContactos:hover, #btnEnviarLista:hover {
+      background: #f57c00;
+    }
+
+    @media (max-width: 1000px) {
+      .kanban { 
+        flex-direction: column; 
+      }
+      .column { 
+        height: auto; 
+        min-width: auto; 
+      }
+      #chat { 
+        width: 100%; 
+        height: 60%; 
+        position: fixed; 
+        bottom: 0; 
+      }
+    }
+    
+    #graficoModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .grafico-contenedor {
+      background: #1b1b1b;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px #00ffc6;
+      text-align: center;
+      max-width: 500px;
+      width: 90%;
+    }
+    
+    .grafico-contenedor button {
+      margin-top: 10px;
+      background: #00ffc6;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    
+    .grafico-contenedor button:hover {
+      background: #00bba6;
+    }
+
+    #modalMasivo {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 99999;
+    }
+    
+    .modal-contenido {
+      background: #1b1b1b;
+      padding: 20px;
+      border-radius: 10px;
+      width: 350px;
+      box-shadow: 0 0 15px #00ffc6;
+      text-align: center;
+    }
+    
+    .modal-contenido textarea {
+      width: 100%;
+      height: 100px;
+      background: #333;
+      color: white;
+      border: none;
+      padding: 8px;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+    
+    .modal-contenido button {
+      margin: 5px;
+    }
+
+    /* Modal para envío masivo por estado */
+    #modalMasivoEstado {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 99999;
+    }
+
+    .modal-estado-contenido {
+      background: #1b1b1b;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      box-shadow: 0 0 15px #00ffc6;
+      text-align: left;
+    }
+
+    .estados-checkbox {
+      margin: 10px 0;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #2b2b2b;
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    .checkbox-item {
+      margin: 8px 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .checkbox-item input {
+      margin-right: 8px;
+    }
+
+    .checkbox-item label {
+      cursor: pointer;
+    }
+
+    .contador-clientes {
+      font-size: 12px;
+      color: #00ffc6;
+      margin-left: 10px;
+    }
+
+    .resumen-envio {
+      margin-top: 10px;
+      padding: 10px;
+      background: #2b2b2b;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    /* Estilos para multimedia */
+    .msg-imagen, .msg-video, .msg-documento {
+      max-width: 250px;
+      margin: 5px 0;
+    }
+
+    .msg-imagen img {
+      max-width: 100%;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .msg-video video {
+      max-width: 100%;
+      border-radius: 8px;
+    }
+
+    .msg-documento {
+      background: rgba(255,255,255,0.1);
+      padding: 10px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .msg-documento .icono {
+      font-size: 24px;
+    }
+
+    .msg-documento .info {
+      flex: 1;
+    }
+
+    .msg-documento .nombre {
+      font-weight: bold;
+      font-size: 12px;
+    }
+
+    .msg-documento .descargar {
+      background: #00ffc6;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    /* Modal para vista ampliada de imágenes */
+    #modalImagen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #modalImagen img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 10px;
+    }
+
+    #cerrarModalImagen {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: #ff5555;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* Botones de multimedia */
+    .botones-multimedia {
+      display: flex;
+      gap: 5px;
+      padding: 5px 10px;
+      background: #2b2b2b;
+      border-top: 1px solid #333;
+    }
+
+    .boton-multimedia {
+      background: #444;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .boton-multimedia:hover {
+      background: #555;
+    }
+
+    /* Inputs de archivo ocultos */
+    #inputAudio, #inputImagen, #inputDocumento {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CRM WhatsApp</h1>
+    <div>
+      <input type="text" id="search" placeholder="Buscar...">
+      <button id="exportar">Exportar CSV</button>
+      <button id="verGrafico">📊 Ver estadísticas</button>
+      <button id="btnMasivoGlobal">📢 Todos</button>
+      <button id="btnMasivoEstado">📊 Por Estado</button>
+      <!-- Botones se crearán dinámicamente -->
+    </div>
+  </header>
+
+  <div class="kanban" id="kanban">
+    <div class="column" data-etiqueta="nuevo" style="border-top:4px solid #00bcd4;"><h2>Nuevo</h2></div>
+    <div class="column" data-etiqueta="callback" style="border-top:4px solid #f3e921;"><h2>Callback</h2></div>
+    <div class="column" data-etiqueta="analista" style="border-top:4px solid #4caf50;"><h2>Quiere Analista</h2></div>
+    <div class="column" data-etiqueta="grupos" style="border-top:4px solid #9c27b0;"><h2>Grupos</h2></div>
+    <div class="column" data-etiqueta="bloqueado" style="border-top:4px solid #e53935;"><h2>Bloqueado</h2></div>
+    <div class="column" data-etiqueta="archivado" style="border-top:4px solid #d6d6d6;"><h2>Archivado</h2></div>
+  </div>
+
+  <div id="chat">
+    <header><span id="chat-header"></span><button id="cerrarChat">❌</button></header>
+
+    <div class="nota-box">
+      <h3>📝 Nota del contacto <button id="toggleNota">Editar</button></h3>
+      <textarea id="nota" placeholder="Escribe una nota..." readonly></textarea>
+    </div>
+
+    <!-- Sección de Recordatorios - Solo visible en callback -->
+    <div class="recordatorios-box" id="recordatoriosBox" style="display: none;">
+      <h3>⏰ Recordatorios de Callback 
+        <button id="toggleRecordatorios">Ver</button>
+        <button id="nuevoRecordatorio">+ Nuevo</button>
+      </h3>
+      
+      <div id="listaRecordatorios" style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;">
+        <!-- Los recordatorios se cargarán aquí -->
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div id="mensajes"></div>
+
+    <!-- Botones de multimedia -->
+    <div class="botones-multimedia">
+      <button class="boton-multimedia" onclick="document.getElementById('inputImagen').click()">
+        📷 Imagen
+      </button>
+      <button class="boton-multimedia" onclick="document.getElementById('inputAudio').click()">
+        🎵 Audio
+      </button>
+      <button class="boton-multimedia" onclick="document.getElementById('inputDocumento').click()">
+        📄 Archivo
+      </button>
+    </div>
+
+    <div id="enviar-area">
+      <input id="texto" placeholder="Escribe un mensaje...">
+      <button id="enviar">Enviar</button>
+      <button id="grabarAudio">🎤</button>
+    </div>
+
+    <div class="respuestas">
+      <h4>Respuestas rápidas</h4>
+      <div id="listaRespuestas"></div>
+      <input id="nuevaResp" placeholder="Nueva respuesta...">
+      <button id="addResp">Agregar</button>
+    </div>
+  </div>
+
+  <!-- Inputs de archivo ocultos -->
+  <input type="file" id="inputAudio" accept="audio/*" onchange="enviarAudio(this.files[0])">
+  <input type="file" id="inputImagen" accept="image/*" onchange="enviarImagen(this.files[0])">
+  <input type="file" id="inputDocumento" onchange="enviarDocumento(this.files[0])">
+
+  <!-- Modal para vista ampliada de imágenes -->
+  <div id="modalImagen">
+    <button id="cerrarModalImagen">✕</button>
+    <img id="imagenAmpliada" src="">
+  </div>
+
+  <div id="qrModal">
+    <h2>Escanea este código QR para conectar tu WhatsApp</h2>
+    <img id="qrImg">
+  </div>
+  
+  <audio id="notif" src="sonido.mp3"></audio>
+  
+  <!-- Popup del gráfico -->
+  <div id="graficoModal">
+    <div class="grafico-contenedor">
+      <h2>📈 Estado actual del CRM</h2>
+      <canvas id="graficoCRM" width="400" height="300"></canvas>
+      <button id="cerrarGrafico">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- POPUP ENVÍO MASIVO A TODOS -->
+  <div id="modalMasivo">
+    <div class="modal-contenido">
+      <h3>Enviar mensaje a todos los clientes</h3>
+      <textarea id="masivoTexto" placeholder="Escribe el mensaje a enviar..."></textarea>
+      <div>
+        <button id="confirmarMasivo">Enviar</button>
+        <button id="cancelarMasivo">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP ENVÍO MASIVO POR ESTADO -->
+  <div id="modalMasivoEstado">
+    <div class="modal-estado-contenido">
+      <h3>📢 Envío masivo por estado</h3>
+      
+      <div class="estados-checkbox" id="estadosCheckbox">
+        <!-- Los checkboxes se generarán dinámicamente -->
+      </div>
+      
+      <textarea id="masivoEstadoTexto" placeholder="Escribe el mensaje a enviar..." style="width: 100%; height: 80px; background: #333; color: white; border: none; padding: 8px; border-radius: 6px; margin: 10px 0;"></textarea>
+      
+      <div class="resumen-envio" id="resumenEnvio" style="display: none;">
+        <strong>Resumen:</strong>
+        <div id="detalleResumen"></div>
+      </div>
+      
+      <div style="text-align: center; margin-top: 15px;">
+        <button id="confirmarMasivoEstado">Enviar a clientes seleccionados</button>
+        <button id="cancelarMasivoEstado" style="background: #666;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Subir Contactos -->
+  <div id="modalSubirContactos">
+    <div class="modal-contenido">
+      <h3>📁 Subir Contactos desde Archivo</h3>
+      
+      <div style="margin: 15px 0;">
+        <p><strong>Formatos soportados:</strong></p>
+        <ul style="text-align: left; margin: 10px 0;">
+          <li><strong>.txt</strong> - Un número por línea</li>
+          <li><strong>.csv</strong> - Números en cualquier columna</li>
+        </ul>
+        <p style="font-size: 12px; color: #ccc;">
+          Ejemplos: 521234567890, 1234567890, +521234567890
+        </p>
+      </div>
+
+      <input type="file" id="archivoContactos" accept=".txt,.csv" 
+             style="width: 100%; margin: 10px 0; padding: 8px; background: #333; color: white; border: none; border-radius: 6px;">
+      
+      <div id="resumenCarga" style="display: none; margin: 10px 0; padding: 10px; background: #2b2b2b; border-radius: 6px;">
+        <h4>Resumen de Carga</h4>
+        <div id="detalleCarga"></div>
+      </div>
+
+      <div style="margin: 15px 0;">
+        <button id="procesarArchivo">📥 Procesar Archivo</button>
+        <button id="cerrarSubirContactos" style="background: #666;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Enviar a Lista Específica -->
+  <div id="modalEnviarLista">
+    <div class="modal-contenido" style="width: 500px;">
+      <h3>📤 Enviar Mensaje a Lista Específica</h3>
+      
+      <div style="margin: 10px 0;">
+        <label>Números (uno por línea):</label>
+        <textarea id="listaNumeros" placeholder="Ejemplo:
+521234567890
+525551234567
+528881234567" 
+                  style="width: 100%; height: 150px; background: #333; color: white; border: none; padding: 8px; border-radius: 6px; margin: 5px 0;"></textarea>
+      </div>
+
+      <div style="margin: 10px 0;">
+        <label>Mensaje:</label>
+        <textarea id="mensajeLista" placeholder="Escribe el mensaje a enviar..." 
+                  style="width: 100%; height: 80px; background: #333; color: white; border: none; padding: 8px; border-radius: 6px; margin: 5px 0;"></textarea>
+      </div>
+
+      <div id="resumenEnvioLista" style="display: none; margin: 10px 0; padding: 10px; background: #2b2b2b; border-radius: 6px;">
+        <h4>Resumen de Envío</h4>
+        <div id="detalleEnvioLista"></div>
+      </div>
+
+      <div>
+        <button id="confirmarEnvioLista">🚀 Enviar a Lista</button>
+        <button id="cancelarEnvioLista" style="background: #666;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Nuevo Recordatorio -->
+  <div id="modalRecordatorio">
+    <div class="modal-contenido">
+      <h3>⏰ Nuevo Recordatorio</h3>
+      
+      <div style="margin: 10px 0;">
+        <label>Fecha y Hora:</label>
+        <input type="datetime-local" id="fechaRecordatorio" 
+               style="width: 100%; padding: 8px; background: #333; color: white; border: none; border-radius: 6px; margin: 5px 0;">
+      </div>
+      
+      <div style="margin: 10px 0;">
+        <label>Mensaje (opcional):</label>
+        <textarea id="mensajeRecordatorio" placeholder="Ej: Llamar para seguimiento de crédito..." 
+                  style="width: 100%; height: 80px; background: #333; color: white; border: none; padding: 8px; border-radius: 6px; margin: 5px 0;"></textarea>
+      </div>
+
+      <div>
+        <button id="guardarRecordatorio">💾 Guardar Recordatorio</button>
+        <button id="cancelarRecordatorio" style="background: #666;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Notificación de Recordatorio -->
+  <div id="modalNotificacionRecordatorio">
+    <div class="modal-contenido" style="background: #ff9800; color: #000;">
+      <h3>⏰ Recordatorio de Callback</h3>
+      <div id="contenidoNotificacion"></div>
+      <div style="margin-top: 15px;">
+        <button id="irAlChatRecordatorio" style="background: #000; color: #fff;">💬 Ir al Chat</button>
+        <button id="posponerRecordatorio" style="background: #666;">⏱ Posponer 10 min</button>
+        <button id="completarRecordatorio" style="background: #4caf50;">✅ Completado</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    // Variables globales
+    const notif = document.getElementById('notif');
+    const mensajesDiv = document.getElementById('mensajes');
+    const textoInput = document.getElementById('texto');
+    const notaBox = document.getElementById('nota');
+    const toggleNotaBtn = document.getElementById('toggleNota');
+    const cerrarChatBtn = document.getElementById('cerrarChat');
+    let clienteActual = null;
+    let editandoNota = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let conteoEstados = {};
+    const modalMasivoEstado = document.getElementById("modalMasivoEstado");
+    const modalSubirContactos = document.getElementById("modalSubirContactos");
+    const modalEnviarLista = document.getElementById("modalEnviarLista");
+    const modalRecordatorio = document.getElementById("modalRecordatorio");
+    const modalNotificacionRecordatorio = document.getElementById("modalNotificacionRecordatorio");
+
+    // Variables para recordatorios
+    let recordatoriosAbiertos = false;
+    let recordatorioActual = null;
+    let intervaloRecordatorios = null;
+    let recordatoriosPendientes = [];
+
+    // Función para verificar estado QR
+    async function verificarQR() {
+      try {
+        const res = await fetch('/qr.json?_=' + Date.now());
+        if (res.ok) {
+          const data = await res.json();
+          const qrModal = document.getElementById('qrModal');
+          if (data.qr) {
+            qrModal.style.display = 'flex';
+            document.getElementById('qrImg').src = data.qr;
+          } else {
+            qrModal.style.display = 'none';
+          }
+        }
+      } catch (error) {
+        console.error('Error verificando QR:', error);
+      }
+    }
+
+    // Función para cargar clientes
+    async function cargarClientes() {
+      try {
+        const res = await fetch('/clientes');
+        const clientes = await res.json();
+        
+        // Limpiar columnas
+        document.querySelectorAll('.column').forEach(c => {
+          c.innerHTML = '<h2>' + c.querySelector('h2').textContent + '</h2>';
+        });
+        
+        // Agregar clientes a las columnas
+        clientes.forEach(c => {
+          const col = document.querySelector(`[data-etiqueta="${c.archivado ? 'archivado' : c.etiqueta}"]`);
+          if (col) {
+            const div = document.createElement('div');
+            div.className = `cliente ${c.etiqueta}`;
+            div.draggable = true;
+            
+            const numeroLimpio = c.numero.replace(/@s\.whatsapp\.net$/, "");
+            let nombreMostrar = c.nombre;
+
+            if (!nombreMostrar || nombreMostrar.includes("@s.whatsapp.net") || nombreMostrar === numeroLimpio) {
+              nombreMostrar = "";
+            }
+
+            const nombre = document.createElement('span');
+            nombre.textContent = nombreMostrar
+              ? `${nombreMostrar} (${numeroLimpio})`
+              : `${numeroLimpio}`;
+
+            const eliminar = document.createElement('button');
+            eliminar.textContent = '❌';
+            eliminar.style.background = 'transparent';
+            eliminar.style.color = '#ff5555';
+            eliminar.style.border = 'none';
+            eliminar.style.cursor = 'pointer';
+            eliminar.style.marginLeft = '5px';
+            eliminar.onclick = async (e) => {
+              e.stopPropagation();
+              if (confirm(`¿Eliminar ${c.nombre} del CRM?`)) {
+                await fetch(`/clientes/${encodeURIComponent(c.numero)}`, { method: 'DELETE' });
+                cargarClientes();
+              }
+            };
+
+            const indicador = document.createElement('div');
+            indicador.className = 'indicador';
+            if (localStorage.getItem(`draft_${c.numero}`)) indicador.style.display = 'block';
+
+            div.append(nombre, eliminar, indicador);
+            div.dataset.numero = c.numero;
+            div.onclick = () => abrirChat(c);
+            col.appendChild(div);
+          }
+        });
+      } catch (error) {
+        console.error('Error cargando clientes:', error);
+      }
+    }
+
+    // Función para abrir chat
+    async function abrirChat(cliente) {
+      clienteActual = cliente;
+      document.getElementById('chat').style.display = 'flex';
+      document.getElementById('chat-header').textContent = `${cliente.nombre || cliente.numero}`;
+      await cargarMensajes(cliente.numero);
+      await cargarNota(cliente.numero);
+      await cargarRespuestas();
+      
+      // Actualizar visibilidad de recordatorios según el estado
+      actualizarVisibilidadRecordatorios(cliente.etiqueta);
+      
+      const draft = localStorage.getItem(`draft_${cliente.numero}`);
+      textoInput.value = draft || '';
+      marcarIndicador(cliente.numero, false);
+    }
+
+    // Cerrar chat
+    cerrarChatBtn.onclick = () => {
+      document.getElementById('chat').style.display = 'none';
+      if (clienteActual && !textoInput.value.trim()) {
+        marcarIndicador(clienteActual.numero, false);
+      }
+    };
+
+    // Función para cargar mensajes
+    async function cargarMensajes(numero) {
+      try {
+        console.log(`📨 Cargando mensajes para: ${numero}`);
+        const res = await fetch(`/mensajes/${numero}?_=${Date.now()}`);
+        
+        if (!res.ok) {
+          throw new Error(`Error HTTP: ${res.status}`);
+        }
+        
+        const mensajes = await res.json();
+        console.log(`✅ Recibidos ${mensajes.length} mensajes`);
+        
+        mensajesDiv.innerHTML = '';
+        
+        mensajes.forEach(m => {
+          const div = document.createElement("div");
+          div.className = `msg ${m.tipo === 'enviado' ? 'enviado' : 'recibido'}`;
+
+          // Mostrar archivos multimedia
+          if (m.archivo && m.es_multimedia) {
+            if (m.mime_type && m.mime_type.startsWith('audio/')) {
+              // Audio
+              const audioContainer = document.createElement("div");
+              audioContainer.className = "msg-audio";
+              
+              const audio = document.createElement("audio");
+              audio.controls = true;
+              audio.src = m.archivo;
+              audio.style.width = "100%";
+              audioContainer.appendChild(audio);
+              
+              if (m.mensaje && m.mensaje !== "(audio)" && m.mensaje !== "🎵 Audio") {
+                const caption = document.createElement("div");
+                caption.textContent = m.mensaje;
+                caption.style.marginTop = "5px";
+                caption.style.fontSize = "12px";
+                caption.style.color = m.tipo === 'enviado' ? '#000' : '#fff';
+                audioContainer.appendChild(caption);
+              }
+              
+              div.appendChild(audioContainer);
+              
+            } else if (m.mime_type && m.mime_type.startsWith('image/')) {
+              // Imagen
+              const imgContainer = document.createElement("div");
+              imgContainer.className = "msg-imagen";
+              
+              const img = document.createElement("img");
+              img.src = m.archivo;
+              img.alt = "Imagen";
+              img.style.cursor = "pointer";
+              img.style.maxWidth = "100%";
+              img.style.borderRadius = "8px";
+              img.onclick = () => mostrarImagenAmpliada(m.archivo);
+              imgContainer.appendChild(img);
+              
+              if (m.mensaje && m.mensaje !== "(imagen)" && m.mensaje !== "🖼️ Imagen") {
+                const caption = document.createElement("div");
+                caption.textContent = m.mensaje;
+                caption.style.marginTop = "5px";
+                caption.style.fontSize = "12px";
+                caption.style.color = m.tipo === 'enviado' ? '#000' : '#fff';
+                imgContainer.appendChild(caption);
+              }
+              
+              div.appendChild(imgContainer);
+              
+            } else if (m.mime_type && m.mime_type.startsWith('video/')) {
+              // Video
+              const videoContainer = document.createElement("div");
+              videoContainer.className = "msg-video";
+              
+              const video = document.createElement("video");
+              video.controls = true;
+              video.src = m.archivo;
+              video.style.width = "100%";
+              video.style.maxWidth = "250px";
+              video.style.borderRadius = "8px";
+              videoContainer.appendChild(video);
+              
+              if (m.mensaje && m.mensaje !== "(video)" && m.mensaje !== "🎥 Video") {
+                const caption = document.createElement("div");
+                caption.textContent = m.mensaje;
+                caption.style.marginTop = "5px";
+                caption.style.fontSize = "12px";
+                caption.style.color = m.tipo === 'enviado' ? '#000' : '#fff';
+                videoContainer.appendChild(caption);
+              }
+              
+              div.appendChild(videoContainer);
+              
+            } else {
+              // Documento/Archivo
+              const docContainer = document.createElement("div");
+              docContainer.className = "msg-documento";
+              docContainer.style.maxWidth = "250px";
+              
+              const icono = document.createElement("div");
+              icono.className = "icono";
+              icono.textContent = "📄";
+              icono.style.fontSize = "24px";
+              docContainer.appendChild(icono);
+              
+              const info = document.createElement("div");
+              info.className = "info";
+              info.style.flex = "1";
+              info.style.marginLeft = "10px";
+              
+              const nombre = document.createElement("div");
+              nombre.className = "nombre";
+              nombre.textContent = m.archivo.split('/').pop();
+              nombre.style.fontWeight = "bold";
+              nombre.style.fontSize = "12px";
+              info.appendChild(nombre);
+              
+              if (m.mensaje && !m.mensaje.startsWith('(documento:') && !m.mensaje.startsWith('📄')) {
+                const desc = document.createElement("div");
+                desc.className = "descripcion";
+                desc.textContent = m.mensaje;
+                desc.style.fontSize = "11px";
+                desc.style.color = "#ccc";
+                desc.style.marginTop = "2px";
+                info.appendChild(desc);
+              }
+              
+              docContainer.appendChild(info);
+              
+              const descargar = document.createElement("button");
+              descargar.className = "descargar";
+              descargar.textContent = "📥";
+              descargar.title = "Descargar";
+              descargar.style.background = "#00ffc6";
+              descargar.style.color = "#000";
+              descargar.style.border = "none";
+              descargar.style.borderRadius = "4px";
+              descargar.style.padding = "4px 8px";
+              descargar.style.cursor = "pointer";
+              descargar.style.fontSize = "12px";
+              descargar.onclick = () => window.open(m.archivo, '_blank');
+              docContainer.appendChild(descargar);
+              
+              div.appendChild(docContainer);
+            }
+          } else {
+            // Mensaje de texto normal
+            div.textContent = m.mensaje;
+          }
+          
+          mensajesDiv.appendChild(div);
+        });
+        
+        // Scroll al final
+        mensajesDiv.scrollTop = mensajesDiv.scrollHeight;
+        
+      } catch (error) {
+        console.error('Error cargando mensajes:', error);
+        mensajesDiv.innerHTML = '<div style="color: #ff5555; text-align: center; padding: 20px;">Error cargando mensajes</div>';
+      }
+    }
+
+    // Función para cargar nota
+    async function cargarNota(numero) {
+      try {
+        const res = await fetch(`/clientes/${numero}/nota`);
+        const data = await res.json();
+        notaBox.value = data.nota || '';
+        notaBox.readOnly = true;
+        editandoNota = false;
+        toggleNotaBtn.textContent = 'Editar';
+      } catch (error) {
+        console.error('Error cargando nota:', error);
+      }
+    }
+
+    // Toggle edición de nota
+    toggleNotaBtn.onclick = async () => {
+      if (!clienteActual) return;
+      const numero = clienteActual.numero;
+      
+      if (!editandoNota) {
+        notaBox.readOnly = false;
+        notaBox.focus();
+        editandoNota = true;
+        toggleNotaBtn.textContent = 'Guardar';
+        marcarIndicador(numero, true);
+      } else {
+        try {
+          await fetch(`/clientes/${numero}/nota`, {
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nota: notaBox.value })
+          });
+          notaBox.readOnly = true;
+          editandoNota = false;
+          toggleNotaBtn.textContent = 'Editar';
+          marcarIndicador(numero, false);
+        } catch (error) {
+          console.error('Error guardando nota:', error);
+        }
+      }
+    };
+
+    // Manejar input de texto
+    textoInput.addEventListener('input', () => {
+      if (!clienteActual) return;
+      const val = textoInput.value.trim();
+      const numero = clienteActual.numero;
+      
+      if (val) { 
+        localStorage.setItem(`draft_${numero}`, val); 
+        marcarIndicador(numero, true); 
+      } else { 
+        localStorage.removeItem(`draft_${numero}`); 
+        marcarIndicador(numero, false); 
+      }
+    });
+
+    // Enviar mensaje
+    document.getElementById('enviar').onclick = async () => {
+      const texto = textoInput.value.trim();
+      if (!texto || !clienteActual) return;
+      
+      try {
+        await fetch('/enviar', {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero: clienteActual.numero, mensaje: texto })
+        });
+        
+        textoInput.value = '';
+        localStorage.removeItem(`draft_${clienteActual.numero}`);
+        marcarIndicador(clienteActual.numero, false);
+        cargarMensajes(clienteActual.numero);
+      } catch (error) {
+        console.error('Error enviando mensaje:', error);
+      }
+    };
+
+    // Marcar indicador
+    function marcarIndicador(numero, activo) {
+      const cliente = document.querySelector(`.cliente[data-numero="${numero}"] .indicador`);
+      if (cliente) {
+        cliente.style.display = activo ? 'block' : 'none';
+      }
+    }
+
+    // Drag & Drop
+    document.querySelectorAll('.column').forEach(col => {
+      col.ondragover = e => e.preventDefault();
+      col.ondrop = async e => {
+        e.preventDefault();
+        const numero = e.dataTransfer.getData('numero');
+        const etiqueta = col.dataset.etiqueta;
+        const archivado = etiqueta === 'archivado' ? 1 : 0;
+        
+        try {
+          await fetch(`/clientes/${numero}/estado`, {
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ etiqueta, archivado })
+          });
+          cargarClientes();
+        } catch (error) {
+          console.error('Error actualizando estado:', error);
+        }
+      };
+    });
+
+    document.addEventListener('dragstart', e => {
+      if (e.target.classList.contains('cliente')) {
+        e.dataTransfer.setData('numero', e.target.dataset.numero);
+      }
+    });
+
+    // Respuestas rápidas
+    async function cargarRespuestas() {
+      try {
+        const res = await fetch('/respuestas');
+        const data = await res.json();
+        const lista = document.getElementById('listaRespuestas');
+        lista.innerHTML = '';
+        
+        data.forEach(r => {
+          const div = document.createElement('div');
+          div.className = 'respuesta-item';
+          
+          const texto = document.createElement('span');
+          texto.textContent = r.texto;
+          texto.onclick = () => {
+            navigator.clipboard.writeText(r.texto)
+              .then(() => alert('Respuesta copiada al portapapeles'))
+              .catch(err => console.error('Error copiando texto:', err));
+          };
+          
+          const acciones = document.createElement('div');
+          acciones.className = 'acciones';
+          
+          const edit = document.createElement('button');
+          edit.textContent = '✏️';
+          edit.onclick = async () => {
+            const nuevo = prompt('Editar respuesta:', r.texto);
+            if (nuevo) {
+              await fetch(`/respuestas/${r.id}`, {
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ texto: nuevo })
+              });
+              cargarRespuestas();
+            }
+          };
+          
+          const del = document.createElement('button');
+          del.textContent = '❌';
+          del.onclick = async () => {
+            if (confirm('¿Eliminar respuesta?')) {
+              await fetch(`/respuestas/${r.id}`, { method: 'DELETE' });
+              cargarRespuestas();
+            }
+          };
+          
+          acciones.append(edit, del);
+          div.append(texto, acciones);
+          lista.appendChild(div);
+        });
+      } catch (error) {
+        console.error('Error cargando respuestas:', error);
+      }
+    }
+
+    document.getElementById('addResp').onclick = async () => {
+      const txt = document.getElementById('nuevaResp').value.trim();
+      if (!txt) return;
+      
+      try {
+        await fetch('/respuestas', {
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto: txt })
+        });
+        
+        document.getElementById('nuevaResp').value = '';
+        cargarRespuestas();
+      } catch (error) {
+        console.error('Error agregando respuesta:', error);
+      }
+    };
+
+    // Exportar CSV
+    document.getElementById('exportar').onclick = () => {
+      window.location.href = '/exportar';
+    };
+
+    // Búsqueda
+    document.getElementById('search').oninput = e => {
+      const term = e.target.value.toLowerCase();
+      document.querySelectorAll('.cliente').forEach(c => {
+        c.style.display = c.textContent.toLowerCase().includes(term) ? 'flex' : 'none';
+      });
+    };
+
+    // Notificaciones
+    async function checkNotificaciones() {
+      try {
+        const res = await fetch("/notify.json?_=" + Date.now());
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.numero) {
+            notif.play();
+
+            const cliente = document.querySelector(`.cliente[data-numero="${data.numero}"]`);
+            if (cliente) {
+              const indicador = cliente.querySelector(".indicador");
+              indicador.style.display = "block";
+              cliente.style.boxShadow = "0 0 10px #d6d6d6";
+              setTimeout(() => (cliente.style.boxShadow = "none"), 2000);
+            }
+
+            const alerta = document.createElement("div");
+            alerta.className = "alerta";
+            alerta.textContent = `💬 Nuevo mensaje de ${data.nombre}: ${data.mensaje || ""}`;
+            document.body.appendChild(alerta);
+            setTimeout(() => alerta.remove(), 4000);
+
+            fetch("/notify.json", { method: "DELETE" });
+          }
+        }
+      } catch (error) {
+        console.error('Error verificando notificaciones:', error);
+      }
+    }
+
+    // Gráfico
+    document.getElementById('verGrafico').onclick = async () => {
+      try {
+        const res = await fetch('/clientes');
+        const clientes = await res.json();
+
+        const etiquetas = ['Nuevo', 'Callback', 'Quiere Analista', 'Grupos', 'Bloqueado', 'Archivado'];
+        const conteo = { nuevo: 0, callback: 0, analista: 0, grupos: 0, bloqueado: 0, archivado: 0 };
+        
+        clientes.forEach(c => {
+          const e = c.archivado ? 'archivado' : c.etiqueta;
+          if (conteo[e] !== undefined) conteo[e]++;
+        });
+
+        const valores = Object.values(conteo);
+        const modal = document.getElementById('graficoModal');
+        modal.style.display = 'flex';
+
+        const ctx = document.getElementById('graficoCRM').getContext('2d');
+        if (window.chartCRM) window.chartCRM.destroy();
+        
+        window.chartCRM = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: etiquetas,
+            datasets: [{
+              label: 'Clientes por estado',
+              data: valores,
+              backgroundColor: [
+                '#00bcd4', '#e3d922', '#4caf50', '#9c27b0', '#e53935', '#d6d6d6'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { 
+              legend: { 
+                labels: { color: '#fff' } 
+              } 
+            },
+            scales: {
+              x: { 
+                ticks: { color: '#fff' } 
+              },
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  color: '#fff',
+                  stepSize: 1,
+                  callback: function (value) {
+                    if (Number.isInteger(value)) return value;
+                    return null;
+                  }
+                }
+              }
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Error generando gráfico:', err);
+        alert('Error al generar gráfico');
+      }
+    };
+
+    document.getElementById('cerrarGrafico').onclick = () => {
+      document.getElementById('graficoModal').style.display = 'none';
+    };
+
+    // Envío masivo a TODOS
+    const modalMasivo = document.getElementById("modalMasivo");
+
+    document.getElementById("btnMasivoGlobal").onclick = () => {
+      modalMasivo.style.display = "flex";
+    };
+
+    document.getElementById("confirmarMasivo").onclick = async () => {
+      const texto = document.getElementById("masivoTexto").value.trim();
+      if (!texto) return alert("Escribe un mensaje");
+
+      try {
+        document.getElementById("confirmarMasivo").textContent = "⏳ Enviando...";
+        document.getElementById("confirmarMasivo").disabled = true;
+        
+        const res = await fetch("/enviar-masivo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensaje: texto })
+        });
+
+        const result = await res.json();
+        
+        if (res.ok) {
+          let mensaje = `✅ Mensajes enviados exitosamente\n`;
+          mensaje += `📊 Resumen:\n`;
+          mensaje += `• Total: ${result.resumen.total} clientes\n`;
+          mensaje += `• Exitosos: ${result.resumen.exitosos}\n`;
+          mensaje += `• Errores: ${result.resumen.errores}`;
+          
+          alert(mensaje);
+          modalMasivo.style.display = "none";
+          document.getElementById("masivoTexto").value = "";
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+        
+      } catch (error) {
+        console.error('Error enviando mensaje masivo:', error);
+        alert("❌ Error al enviar");
+      } finally {
+        document.getElementById("confirmarMasivo").textContent = "Enviar";
+        document.getElementById("confirmarMasivo").disabled = false;
+      }
+    };
+
+    document.getElementById("cancelarMasivo").onclick = () => {
+      modalMasivo.style.display = "none";
+      document.getElementById("masivoTexto").value = "";
+    };
+
+    // ENVÍO MASIVO POR ESTADO
+    // Función para cargar estadísticas de estados
+    async function cargarEstadisticasEstados() {
+      try {
+        const res = await fetch('/clientes');
+        const clientes = await res.json();
+        
+        conteoEstados = {
+          nuevo: 0,
+          callback: 0,
+          analista: 0,
+          grupos: 0,
+          bloqueado: 0
+        };
+        
+        clientes.forEach(c => {
+          if (!c.archivado && conteoEstados[c.etiqueta] !== undefined) {
+            conteoEstados[c.etiqueta]++;
+          }
+        });
+        
+        return conteoEstados;
+      } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+        return {};
+      }
+    }
+
+    // Función para mostrar el modal de envío por estado
+    document.getElementById("btnMasivoEstado").onclick = async () => {
+      const estadisticas = await cargarEstadisticasEstados();
+      const container = document.getElementById("estadosCheckbox");
+      container.innerHTML = '';
+      
+      const estados = [
+        { id: 'nuevo', label: 'Nuevo', color: '#00bcd4' },
+        { id: 'callback', label: 'Callback', color: '#e3d922' },
+        { id: 'analista', label: 'Quiere Analista', color: '#4caf50' },
+        { id: 'grupos', label: 'Grupos', color: '#9c27b0' },
+        { id: 'bloqueado', label: 'Bloqueado', color: '#e53935' }
+      ];
+      
+      estados.forEach(estado => {
+        const count = estadisticas[estado.id] || 0;
+        const div = document.createElement('div');
+        div.className = 'checkbox-item';
+        div.innerHTML = `
+          <input type="checkbox" id="estado_${estado.id}" value="${estado.id}">
+          <label for="estado_${estado.id}" style="color: ${estado.color};">
+            ${estado.label} <span class="contador-clientes">(${count} clientes)</span>
+          </label>
+        `;
+        container.appendChild(div);
+      });
+      
+      // Actualizar resumen cuando cambien los checkboxes
+      container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', actualizarResumenEnvio);
+      });
+      
+      modalMasivoEstado.style.display = "flex";
+      document.getElementById("masivoEstadoTexto").value = "";
+      document.getElementById("resumenEnvio").style.display = "none";
+    };
+
+    // Función para actualizar el resumen del envío
+    function actualizarResumenEnvio() {
+      const checkboxes = document.querySelectorAll('#estadosCheckbox input[type="checkbox"]:checked');
+      const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+      let totalClientes = 0;
+      
+      estadosSeleccionados.forEach(estado => {
+        totalClientes += conteoEstados[estado] || 0;
+      });
+      
+      const resumenDiv = document.getElementById("resumenEnvio");
+      const detalleDiv = document.getElementById("detalleResumen");
+      
+      if (estadosSeleccionados.length > 0) {
+        resumenDiv.style.display = "block";
+        detalleDiv.innerHTML = `
+          <div>Estados seleccionados: ${estadosSeleccionados.length}</div>
+          <div>Total de clientes: ${totalClientes}</div>
+          <div style="font-size: 12px; color: #ccc;">${estadosSeleccionados.join(', ')}</div>
+        `;
+      } else {
+        resumenDiv.style.display = "none";
+      }
+    }
+
+    // Confirmar envío masivo por estado
+    document.getElementById("confirmarMasivoEstado").onclick = async () => {
+      const texto = document.getElementById("masivoEstadoTexto").value.trim();
+      if (!texto) return alert("Escribe un mensaje");
+      
+      const checkboxes = document.querySelectorAll('#estadosCheckbox input[type="checkbox"]:checked');
+      const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+      
+      if (estadosSeleccionados.length === 0) {
+        return alert("Selecciona al menos un estado");
+      }
+      
+      try {
+        document.getElementById("confirmarMasivoEstado").textContent = "⏳ Enviando...";
+        document.getElementById("confirmarMasivoEstado").disabled = true;
+        
+        const res = await fetch("/enviar-masivo-estado", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            mensaje: texto, 
+            estados: estadosSeleccionados 
+          })
+        });
+
+        const result = await res.json();
+        
+        if (res.ok) {
+          let mensaje = `✅ Mensajes enviados exitosamente\n`;
+          mensaje += `📊 Resumen:\n`;
+          mensaje += `• Total: ${result.resumen.total} clientes\n`;
+          mensaje += `• Exitosos: ${result.resumen.exitosos}\n`;
+          mensaje += `• Errores: ${result.resumen.errores}`;
+          
+          alert(mensaje);
+          modalMasivoEstado.style.display = "none";
+          document.getElementById("masivoEstadoTexto").value = "";
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+        
+      } catch (error) {
+        console.error('Error enviando mensaje masivo por estado:', error);
+        alert("❌ Error al enviar mensajes");
+      } finally {
+        document.getElementById("confirmarMasivoEstado").textContent = "Enviar a clientes seleccionados";
+        document.getElementById("confirmarMasivoEstado").disabled = false;
+      }
+    };
+
+    // Cancelar envío masivo por estado
+    document.getElementById("cancelarMasivoEstado").onclick = () => {
+      modalMasivoEstado.style.display = "none";
+      document.getElementById("masivoEstadoTexto").value = "";
+    };
+
+    // ==============================================
+    // GESTIÓN DE CONTACTOS MASIVOS
+    // ==============================================
+
+    // Crear botones en el header
+    function crearBotonesContactos() {
+      // Botón para subir contactos
+      const btnSubirContactos = document.createElement("button");
+      btnSubirContactos.textContent = "📁 Subir Contactos";
+      btnSubirContactos.id = "btnSubirContactos";
+      btnSubirContactos.style.margin = "0 5px";
+      btnSubirContactos.style.background = "#ff9800";
+      btnSubirContactos.style.color = "#000";
+      btnSubirContactos.style.border = "none";
+      btnSubirContactos.style.borderRadius = "5px";
+      btnSubirContactos.style.padding = "6px 10px";
+      btnSubirContactos.style.cursor = "pointer";
+      btnSubirContactos.style.fontFamily = "'Poppins', sans-serif";
+      
+      // Botón para enviar a lista específica
+      const btnEnviarLista = document.createElement("button");
+      btnEnviarLista.textContent = "📋 Enviar a Lista";
+      btnEnviarLista.id = "btnEnviarLista";
+      btnEnviarLista.style.margin = "0 5px";
+      btnEnviarLista.style.background = "#9c27b0";
+      btnEnviarLista.style.color = "#fff";
+      btnEnviarLista.style.border = "none";
+      btnEnviarLista.style.borderRadius = "5px";
+      btnEnviarLista.style.padding = "6px 10px";
+      btnEnviarLista.style.cursor = "pointer";
+      btnEnviarLista.style.fontFamily = "'Poppins', sans-serif";
+
+      // Agregar al header
+      const headerDiv = document.querySelector("header div");
+      headerDiv.appendChild(btnSubirContactos);
+      headerDiv.appendChild(btnEnviarLista);
+
+      // Event listeners
+      btnSubirContactos.onclick = () => {
+        modalSubirContactos.style.display = "flex";
+        document.getElementById("resumenCarga").style.display = "none";
+        document.getElementById("archivoContactos").value = "";
+      };
+
+      btnEnviarLista.onclick = () => {
+        modalEnviarLista.style.display = "flex";
+        document.getElementById("resumenEnvioLista").style.display = "none";
+        document.getElementById("listaNumeros").value = "";
+        document.getElementById("mensajeLista").value = "";
+      };
+    }
+
+    // Procesar archivo de contactos
+    document.getElementById("procesarArchivo").onclick = async () => {
+      const archivoInput = document.getElementById("archivoContactos");
+      const archivo = archivoInput.files[0];
+      
+      if (!archivo) {
+        alert("Selecciona un archivo");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("archivo", archivo);
+
+      try {
+        document.getElementById("procesarArchivo").textContent = "⏳ Procesando...";
+        document.getElementById("procesarArchivo").disabled = true;
+
+        const response = await fetch("/subir-contactos", {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          const resumen = document.getElementById("resumenCarga");
+          const detalle = document.getElementById("detalleCarga");
+          
+          resumen.style.display = "block";
+          detalle.innerHTML = `
+            <div>✅ <strong>${result.resumen.nuevos}</strong> nuevos contactos agregados</div>
+            <div>📋 <strong>${result.resumen.existentes}</strong> contactos ya existían</div>
+            <div>❌ <strong>${result.resumen.errores}</strong> errores</div>
+            <div style="margin-top: 10px; font-size: 12px;">
+              <strong>Total procesados:</strong> ${result.resumen.total}
+            </div>
+          `;
+
+          // Recargar la lista de clientes
+          cargarClientes();
+          
+          alert(result.mensaje);
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+
+      } catch (error) {
+        console.error('Error procesando archivo:', error);
+        alert("❌ Error al procesar archivo");
+      } finally {
+        document.getElementById("procesarArchivo").textContent = "📥 Procesar Archivo";
+        document.getElementById("procesarArchivo").disabled = false;
+      }
+    };
+
+    // Enviar mensaje a lista específica
+    document.getElementById("confirmarEnvioLista").onclick = async () => {
+      const numerosTexto = document.getElementById("listaNumeros").value.trim();
+      const mensaje = document.getElementById("mensajeLista").value.trim();
+
+      if (!numerosTexto) {
+        alert("Ingresa al menos un número");
+        return;
+      }
+
+      if (!mensaje) {
+        alert("Escribe un mensaje");
+        return;
+      }
+
+      // Procesar números (uno por línea)
+      const numeros = numerosTexto.split('\n')
+        .map(num => num.trim())
+        .filter(num => num.length > 0)
+        .map(num => {
+          // Formatear números automáticamente
+          let numeroLimpio = num.replace(/\D/g, '');
+          if (numeroLimpio.length === 10) {
+            numeroLimpio = '52' + numeroLimpio; // Asumir México
+          }
+          return numeroLimpio + '@s.whatsapp.net';
+        });
+
+      try {
+        document.getElementById("confirmarEnvioLista").textContent = "⏳ Enviando...";
+        document.getElementById("confirmarEnvioLista").disabled = true;
+
+        const response = await fetch("/enviar-lista-contactos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numeros, mensaje })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          const resumen = document.getElementById("resumenEnvioLista");
+          const detalle = document.getElementById("detalleEnvioLista");
+          
+          resumen.style.display = "block";
+          detalle.innerHTML = `
+            <div>✅ <strong>${result.resumen.exitosos}</strong> mensajes enviados</div>
+            <div>❌ <strong>${result.resumen.errores}</strong> errores</div>
+            <div style="margin-top: 5px; font-size: 12px;">
+              <strong>Total:</strong> ${result.resumen.total} números
+            </div>
+          `;
+
+          alert(`✅ ${result.resumen.exitosos} mensajes enviados exitosamente`);
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+
+      } catch (error) {
+        console.error('Error enviando a lista:', error);
+        alert("❌ Error al enviar mensajes");
+      } finally {
+        document.getElementById("confirmarEnvioLista").textContent = "🚀 Enviar a Lista";
+        document.getElementById("confirmarEnvioLista").disabled = false;
+      }
+    };
+
+    // Cerrar modales de contactos
+    document.getElementById("cerrarSubirContactos").onclick = () => {
+      modalSubirContactos.style.display = "none";
+    };
+
+    document.getElementById("cancelarEnvioLista").onclick = () => {
+      modalEnviarLista.style.display = "none";
+    };
+
+    // ==============================================
+    // SISTEMA DE RECORDATORIOS PARA CALLBACK
+    // ==============================================
+
+    // Mostrar/ocultar sección de recordatorios según el estado
+    function actualizarVisibilidadRecordatorios(etiqueta) {
+      const recordatoriosBox = document.getElementById("recordatoriosBox");
+      if (etiqueta === "callback") {
+        recordatoriosBox.style.display = "block";
+      } else {
+        recordatoriosBox.style.display = "none";
+        recordatoriosAbiertos = false;
+        document.getElementById("listaRecordatorios").style.display = "none";
+        document.getElementById("toggleRecordatorios").textContent = "Ver";
+      }
+    }
+
+    // Toggle visibilidad de recordatorios
+    document.getElementById("toggleRecordatorios").onclick = () => {
+      if (!clienteActual) return;
+      
+      const lista = document.getElementById("listaRecordatorios");
+      const toggleBtn = document.getElementById("toggleRecordatorios");
+      
+      if (!recordatoriosAbiertos) {
+        cargarRecordatorios(clienteActual.numero);
+        lista.style.display = "block";
+        toggleBtn.textContent = "Ocultar";
+        recordatoriosAbiertos = true;
+      } else {
+        lista.style.display = "none";
+        toggleBtn.textContent = "Ver";
+        recordatoriosAbiertos = false;
+      }
+    };
+
+    // Abrir modal para nuevo recordatorio
+    document.getElementById("nuevoRecordatorio").onclick = () => {
+      if (!clienteActual) return;
+      
+      // Establecer fecha mínima como ahora
+      const ahora = new Date();
+      const fechaMinima = new Date(ahora.getTime() + 10 * 60 * 1000); // 10 minutos en el futuro
+      document.getElementById("fechaRecordatorio").min = fechaMinima.toISOString().slice(0, 16);
+      
+      // Establecer valor por defecto (30 minutos en el futuro)
+      const fechaPorDefecto = new Date(ahora.getTime() + 30 * 60 * 1000);
+      document.getElementById("fechaRecordatorio").value = fechaPorDefecto.toISOString().slice(0, 16);
+      
+      document.getElementById("mensajeRecordatorio").value = "";
+      modalRecordatorio.style.display = "flex";
+    };
+
+    // Cargar recordatorios de un contacto
+    async function cargarRecordatorios(numero) {
+      try {
+        const response = await fetch(`/recordatorios/${encodeURIComponent(numero)}`);
+        const recordatorios = await response.json();
+        
+        const lista = document.getElementById("listaRecordatorios");
+        lista.innerHTML = "";
+        
+        if (recordatorios.length === 0) {
+          lista.innerHTML = '<div style="text-align: center; color: #ccc; padding: 10px;">No hay recordatorios programados</div>';
+          return;
+        }
+        
+        recordatorios.forEach(recordatorio => {
+          const div = document.createElement("div");
+          div.className = "recordatorio-item";
+          div.style.background = "rgba(255,255,255,0.1)";
+          div.style.padding = "8px";
+          div.style.margin = "5px 0";
+          div.style.borderRadius = "6px";
+          div.style.display = "flex";
+          div.style.justifyContent = "space-between";
+          div.style.alignItems = "center";
+          
+          const fecha = new Date(recordatorio.fecha_recordatorio);
+          const ahora = new Date();
+          const diffMs = fecha - ahora;
+          const diffMins = Math.floor(diffMs / 60000);
+          
+          let estado = "";
+          if (diffMins < 0) {
+            estado = "<span style='color: #ff5555;'>⏰ Vencido</span>";
+          } else if (diffMins < 60) {
+            estado = `<span style='color: #ff9800;'>⏳ En ${diffMins} min</span>`;
+          } else {
+            const diffHours = Math.floor(diffMins / 60);
+            estado = `<span style='color: #4caf50;'>📅 En ${diffHours}h</span>`;
+          }
+          
+          div.innerHTML = `
+            <div style="flex: 1;">
+              <div style="font-size: 12px; font-weight: bold;">
+                ${fecha.toLocaleString('es-MX')}
+              </div>
+              <div style="font-size: 11px; color: #ccc;">
+                ${recordatorio.mensaje || "Recordatorio de callback"}
+              </div>
+              <div style="font-size: 10px;">
+                ${estado}
+              </div>
+            </div>
+            <div>
+              <button class="btn-eliminar-recordatorio" data-id="${recordatorio.id}" 
+                      style="background: #ff5555; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">
+                ❌
+              </button>
+            </div>
+          `;
+          
+          lista.appendChild(div);
+        });
+        
+        // Agregar event listeners para eliminar
+        document.querySelectorAll('.btn-eliminar-recordatorio').forEach(btn => {
+          btn.onclick = async (e) => {
+            const id = e.target.dataset.id;
+            if (confirm("¿Eliminar este recordatorio?")) {
+              await eliminarRecordatorio(id);
+              cargarRecordatorios(numero);
+            }
+          };
+        });
+        
+      } catch (error) {
+        console.error('Error cargando recordatorios:', error);
+      }
+    }
+
+    // Guardar nuevo recordatorio
+    document.getElementById("guardarRecordatorio").onclick = async () => {
+      if (!clienteActual) return;
+      
+      const fechaInput = document.getElementById("fechaRecordatorio").value;
+      const mensaje = document.getElementById("mensajeRecordatorio").value.trim();
+      
+      if (!fechaInput) {
+        alert("Selecciona una fecha y hora");
+        return;
+      }
+      
+      try {
+        const response = await fetch("/recordatorios", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            numero: clienteActual.numero,
+            fecha_recordatorio: new Date(fechaInput).toISOString(),
+            mensaje: mensaje || "Recordatorio de callback"
+          })
+        });
+        
+        if (response.ok) {
+          modalRecordatorio.style.display = "none";
+          cargarRecordatorios(clienteActual.numero);
+          alert("✅ Recordatorio guardado");
+        } else {
+          alert("❌ Error al guardar recordatorio");
+        }
+      } catch (error) {
+        console.error('Error guardando recordatorio:', error);
+        alert("❌ Error al guardar recordatorio");
+      }
+    };
+
+    // Eliminar recordatorio
+    async function eliminarRecordatorio(id) {
+      try {
+        const response = await fetch(`/recordatorios/${id}`, {
+          method: "DELETE"
+        });
+        
+        if (!response.ok) {
+          throw new Error("Error eliminando recordatorio");
+        }
+      } catch (error) {
+        console.error('Error eliminando recordatorio:', error);
+        alert("❌ Error al eliminar recordatorio");
+      }
+    }
+
+    // Cancelar recordatorio
+    document.getElementById("cancelarRecordatorio").onclick = () => {
+      modalRecordatorio.style.display = "none";
+    };
+
+    // ==============================================
+    // SISTEMA DE NOTIFICACIONES PUSH
+    // ==============================================
+
+    // Verificar recordatorios próximos
+    async function verificarRecordatorios() {
+      try {
+        const response = await fetch("/recordatorios-proximos?_=" + Date.now());
+        const recordatorios = await response.json();
+        
+        const ahora = new Date();
+        
+        recordatorios.forEach(recordatorio => {
+          const fechaRecordatorio = new Date(recordatorio.fecha_recordatorio);
+          const diffMs = fechaRecordatorio - ahora;
+          
+          // Si el recordatorio está entre ahora y 5 minutos en el futuro
+          if (diffMs > 0 && diffMs <= 5 * 60 * 1000) {
+            // Verificar si ya mostramos esta notificación
+            const yaMostrado = recordatoriosPendientes.find(r => r.id === recordatorio.id);
+            if (!yaMostrado) {
+              mostrarNotificacionRecordatorio(recordatorio);
+              recordatoriosPendientes.push(recordatorio);
+            }
+          }
+        });
+        
+      } catch (error) {
+        console.error('Error verificando recordatorios:', error);
+      }
+    }
+
+    // Mostrar notificación de recordatorio
+    function mostrarNotificacionRecordatorio(recordatorio) {
+      recordatorioActual = recordatorio;
+      
+      const modal = document.getElementById("modalNotificacionRecordatorio");
+      const contenido = document.getElementById("contenidoNotificacion");
+      
+      const fecha = new Date(recordatorio.fecha_recordatorio);
+      
+      contenido.innerHTML = `
+        <div style="font-size: 16px; margin-bottom: 10px;">
+          <strong>${recordatorio.nombre || recordatorio.numero}</strong>
+        </div>
+        <div style="font-size: 14px;">
+          ${recordatorio.mensaje || "Recordatorio de callback"}
+        </div>
+        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+          Programado para: ${fecha.toLocaleString('es-MX')}
+        </div>
+      `;
+      
+      modal.style.display = "flex";
+      
+      // Reproducir sonido de notificación
+      if (notif) {
+        notif.play().catch(e => console.log("No se pudo reproducir sonido"));
+      }
+    }
+
+    // Ir al chat desde la notificación
+    document.getElementById("irAlChatRecordatorio").onclick = async () => {
+      if (!recordatorioActual) return;
+      
+      // Buscar el cliente en la lista
+      const clientesResponse = await fetch("/clientes");
+      const clientes = await clientesResponse.json();
+      
+      const cliente = clientes.find(c => c.numero === recordatorioActual.numero);
+      if (cliente) {
+        abrirChat(cliente);
+      }
+      
+      modalNotificacionRecordatorio.style.display = "none";
+    };
+
+    // Posponer recordatorio
+    document.getElementById("posponerRecordatorio").onclick = async () => {
+      if (!recordatorioActual) return;
+      
+      const nuevaFecha = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+      
+      try {
+        const response = await fetch(`/recordatorios/${recordatorioActual.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fecha_recordatorio: nuevaFecha.toISOString(),
+            mensaje: recordatorioActual.mensaje
+          })
+        });
+        
+        if (response.ok) {
+          modalNotificacionRecordatorio.style.display = "none";
+          alert("⏱ Recordatorio pospuesto 10 minutos");
+          
+          // Remover de pendientes
+          recordatoriosPendientes = recordatoriosPendientes.filter(r => r.id !== recordatorioActual.id);
+          recordatorioActual = null;
+        }
+      } catch (error) {
+        console.error('Error posponiendo recordatorio:', error);
+      }
+    };
+
+    // Marcar como completado
+    document.getElementById("completarRecordatorio").onclick = async () => {
+      if (!recordatorioActual) return;
+      
+      try {
+        const response = await fetch(`/recordatorios/${recordatorioActual.id}/marcar-completado`, {
+          method: "PUT"
+        });
+        
+        if (response.ok) {
+          modalNotificacionRecordatorio.style.display = "none";
+          alert("✅ Recordatorio marcado como completado");
+          
+          // Remover de pendientes
+          recordatoriosPendientes = recordatoriosPendientes.filter(r => r.id !== recordatorioActual.id);
+          recordatorioActual = null;
+        }
+      } catch (error) {
+        console.error('Error completando recordatorio:', error);
+      }
+    };
+
+    // ==============================================
+    // FUNCIONES PARA ENVÍO DE ARCHIVOS MULTIMEDIA
+    // ==============================================
+
+    // Enviar audio
+    async function enviarAudio(file) {
+      if (!clienteActual) {
+        alert("Selecciona un contacto primero");
+        return;
+      }
+
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("audio", file);
+      formData.append("numero", clienteActual.numero);
+
+      try {
+        const response = await fetch("/enviar-audio", {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          cargarMensajes(clienteActual.numero);
+          alert("✅ Audio enviado correctamente");
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+      } catch (error) {
+        console.error('Error enviando audio:', error);
+        alert("❌ Error al enviar audio");
+      }
+    }
+
+    // Enviar imagen
+    async function enviarImagen(file) {
+      if (!clienteActual) {
+        alert("Selecciona un contacto primero");
+        return;
+      }
+
+      if (!file) return;
+
+      const caption = prompt("Añade un pie de foto (opcional):") || "";
+
+      const formData = new FormData();
+      formData.append("imagen", file);
+      formData.append("numero", clienteActual.numero);
+      formData.append("caption", caption);
+
+      try {
+        const response = await fetch("/enviar-imagen", {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          cargarMensajes(clienteActual.numero);
+          alert("✅ Imagen enviada correctamente");
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+      } catch (error) {
+        console.error('Error enviando imagen:', error);
+        alert("❌ Error al enviar imagen");
+      }
+    }
+
+    // Enviar documento
+    async function enviarDocumento(file) {
+      if (!clienteActual) {
+        alert("Selecciona un contacto primero");
+        return;
+      }
+
+      if (!file) return;
+
+      const caption = prompt("Añade un mensaje (opcional):") || "";
+
+      const formData = new FormData();
+      formData.append("documento", file);
+      formData.append("numero", clienteActual.numero);
+      formData.append("caption", caption);
+
+      try {
+        const response = await fetch("/enviar-documento", {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          cargarMensajes(clienteActual.numero);
+          alert("✅ Documento enviado correctamente");
+        } else {
+          alert("❌ Error: " + result.error);
+        }
+      } catch (error) {
+        console.error('Error enviando documento:', error);
+        alert("❌ Error al enviar documento");
+      }
+    }
+
+    // GRABACIÓN DE AUDIO MEJORADA
+    document.getElementById("grabarAudio").onclick = async () => {
+      if (!clienteActual) {
+        alert("Selecciona un contacto primero");
+        return;
+      }
+
+      if (!mediaRecorder) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              channelCount: 1,
+              sampleRate: 44100
+            } 
+          });
+          
+          mediaRecorder = new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              audioChunks.push(e.data);
+            }
+          };
+
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { 
+              type: 'audio/webm'
+            });
+            audioChunks = [];
+
+            const formData = new FormData();
+            formData.append("audio", blob, `audio_${Date.now()}.webm`);
+            formData.append("numero", clienteActual.numero);
+
+            try {
+              document.getElementById("grabarAudio").textContent = "⏳";
+              document.getElementById("grabarAudio").disabled = true;
+              
+              const response = await fetch("/enviar-audio", {
+                method: "POST",
+                body: formData
+              });
+
+              const result = await response.json();
+              
+              if (response.ok) {
+                cargarMensajes(clienteActual.numero);
+                alert("✅ Audio enviado correctamente");
+              } else {
+                alert("❌ Error: " + result.error);
+              }
+              
+            } catch (error) {
+              console.error('Error enviando audio:', error);
+              alert("❌ Error al enviar audio");
+            } finally {
+              document.getElementById("grabarAudio").textContent = "🎤";
+              document.getElementById("grabarAudio").disabled = false;
+              document.getElementById("grabarAudio").style.background = "#00ffc6";
+            }
+          };
+        } catch (error) {
+          console.error('Error accediendo al micrófono:', error);
+          alert("No se pudo acceder al micrófono");
+          return;
+        }
+      }
+
+      if (mediaRecorder.state === "inactive") {
+        audioChunks = [];
+        mediaRecorder.start();
+        document.getElementById("grabarAudio").textContent = "⏹️";
+        document.getElementById("grabarAudio").style.background = "#ff5555";
+        alert("🎤 Grabando... Haz clic nuevamente para enviar");
+      } else {
+        mediaRecorder.stop();
+      }
+    };
+
+    // ==============================================
+    // FUNCIONES AUXILIARES
+    // ==============================================
+
+    function mostrarImagenAmpliada(src) {
+      document.getElementById('imagenAmpliada').src = src;
+      document.getElementById('modalImagen').style.display = 'flex';
+    }
+
+    document.getElementById('cerrarModalImagen').onclick = () => {
+      document.getElementById('modalImagen').style.display = 'none';
+    };
+
+    // Enter para enviar mensaje
+    textoInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('enviar').click();
+      }
+    });
+
+    // ==============================================
+    // INICIALIZACIÓN DEL SISTEMA
+    // ==============================================
+
+    // Inicializar sistema de recordatorios
+    function inicializarSistemaRecordatorios() {
+      // Verificar recordatorios cada 30 segundos
+      intervaloRecordatorios = setInterval(verificarRecordatorios, 30000);
+      
+      // Verificar inmediatamente al cargar
+      setTimeout(verificarRecordatorios, 5000);
+    }
+
+    // Inicialización completa
+    window.addEventListener('load', () => {
+      cargarClientes();
+      verificarQR();
+      crearBotonesContactos();
+      inicializarSistemaRecordatorios();
+    });
+
+    // Intervalos principales
+    setInterval(checkNotificaciones, 2000);
+    setInterval(cargarClientes, 5000);
+    setInterval(verificarQR, 3000);
+  </script>
+
+  <footer id="crm-footer">
+    <p>Creado por <strong>Jorge Márquez</strong></p>
+  </footer>
+</body>
+</html>
