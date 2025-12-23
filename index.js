@@ -1434,6 +1434,24 @@ app.put("/clientes/:numero/nombre", (req, res) => {
     }
   );
 });
+
+// Obtener TODOS los mensajes (para analytics)
+app.get("/mensajes", (req, res) => {
+  console.log("📊 Solicitando todos los mensajes para analytics");
+  
+  db.all(
+    "SELECT * FROM mensajes ORDER BY fecha DESC LIMIT 1000",
+    (err, rows) => {
+      if (err) {
+        console.error("Error obteniendo mensajes:", err);
+        res.status(500).json({ error: "Error al obtener mensajes" });
+      } else {
+        console.log(`✅ Enviando ${rows.length} mensajes`);
+        res.json(rows);
+      }
+    }
+  );
+});
 // Mensajes del chat
 app.get("/mensajes/:numero", (req, res) => {
   const numero = decodeURIComponent(req.params.numero);
@@ -2071,5 +2089,6 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
