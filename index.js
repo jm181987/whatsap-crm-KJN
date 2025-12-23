@@ -69,28 +69,19 @@ db.serialize(() => {
     texto TEXT NOT NULL
   )`);
 
-  // Tabla recordatorios
-  db.run(`CREATE TABLE IF NOT EXISTS recordatorios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    numero TEXT,
-    fecha_recordatorio TEXT,
-    mensaje TEXT,
-    completado INTEGER DEFAULT 0
-  )`);
-});
-  // Crear tabla de recordatorios
+  // Tabla recordatorios (solo UNA definición)
   db.run(`CREATE TABLE IF NOT EXISTS recordatorios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero TEXT NOT NULL,
     fecha_recordatorio TEXT NOT NULL,
     mensaje TEXT,
-    activo INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (numero) REFERENCES clientes (numero) ON DELETE CASCADE
+    completado INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`);
-});
+}); // ← Solo UN cierre aquí
 
 let sock;
+
 
 /* ========================================================
    CONFIGURACIÓN MULTER PARA ARCHIVOS
@@ -2083,6 +2074,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
