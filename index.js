@@ -50,24 +50,28 @@ db.serialize(() => {
       console.log("✅ Tabla mensajes eliminada (si existía)");
     }
     
-    // Crear tabla mensajes con estructura completa
-    db.run(`CREATE TABLE IF NOT EXISTS mensajes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      numero TEXT,
-      mensaje TEXT,
-      tipo TEXT,
-      fecha TEXT,
-      archivo TEXT,
-      mime_type TEXT,
-      es_multimedia INTEGER DEFAULT 0
-    )`, (err) => {
-      if (err) {
-        console.error("Error creando tabla mensajes:", err);
-      } else {
-        console.log("✅ Tabla mensajes creada con estructura completa");
-      }
-    });
+  db.serialize(() => {
+  // Crear tabla mensajes SIN eliminarla
+  db.run(`CREATE TABLE IF NOT EXISTS mensajes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT,
+    mensaje TEXT,
+    tipo TEXT,
+    fecha TEXT,
+    archivo TEXT,
+    mime_type TEXT,
+    es_multimedia INTEGER DEFAULT 0
+  )`, (err) => {
+    if (err) {
+      console.error("Error creando tabla mensajes:", err);
+    } else {
+      console.log("✅ Tabla mensajes verificada");
+    }
   });
+
+  // ... resto de tablas (clientes, respuestas, recordatorios)
+});
+
 
   db.run(`CREATE TABLE IF NOT EXISTS clientes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2089,6 +2093,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
