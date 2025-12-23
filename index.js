@@ -1790,6 +1790,18 @@ app.get("/dashboard/actividad-7dias", (req, res) => {
   });
 });
 
+// Endpoint para obtener mensajes
+app.get('/mensajes', async (req, res) => {
+  try {
+    // Ajusta según tu base de datos
+    const mensajes = await db.query('SELECT * FROM mensajes ORDER BY fecha DESC');
+    res.json(mensajes);
+  } catch (error) {
+    console.error('Error fetching mensajes:', error);
+    res.status(500).json({ error: 'Error al obtener mensajes' });
+  }
+});
+
 /* ========================================================
    ENVÍO A LISTA ESPECÍFICA DE CONTACTOS
 ======================================================== */
@@ -2059,4 +2071,5 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
