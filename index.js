@@ -39,8 +39,6 @@ const db = new sqlite3.Database("crm.db");
 /* ========================================================
    BASE DE DATOS - ESTRUCTURA COMPLETA
 ======================================================== */
-
-// Crear o actualizar la tabla mensajes
 db.serialize(() => {
   // Tabla mensajes
   db.run(`CREATE TABLE IF NOT EXISTS mensajes (
@@ -54,16 +52,7 @@ db.serialize(() => {
     es_multimedia INTEGER DEFAULT 0
   )`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS clientes (...)`);
-  
-  db.run(`CREATE TABLE IF NOT EXISTS respuestas (...)`);
-  
-  db.run(`CREATE TABLE IF NOT EXISTS recordatorios (...)`);
-}); // ← Este cierre es importante
-  // ... resto de tablas (clientes, respuestas, recordatorios)
-
-
-
+  // Tabla clientes
   db.run(`CREATE TABLE IF NOT EXISTS clientes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero TEXT UNIQUE,
@@ -74,11 +63,21 @@ db.serialize(() => {
     nota TEXT DEFAULT ''
   )`);
 
+  // Tabla respuestas
   db.run(`CREATE TABLE IF NOT EXISTS respuestas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     texto TEXT NOT NULL
   )`);
 
+  // Tabla recordatorios
+  db.run(`CREATE TABLE IF NOT EXISTS recordatorios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT,
+    fecha_recordatorio TEXT,
+    mensaje TEXT,
+    completado INTEGER DEFAULT 0
+  )`);
+});
   // Crear tabla de recordatorios
   db.run(`CREATE TABLE IF NOT EXISTS recordatorios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2084,6 +2083,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
