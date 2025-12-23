@@ -42,16 +42,7 @@ const db = new sqlite3.Database("crm.db");
 
 // Crear o actualizar la tabla mensajes
 db.serialize(() => {
-  // Primero eliminamos la tabla mensajes existente si tiene estructura antigua
-  db.run(`DROP TABLE IF EXISTS mensajes`, (err) => {
-    if (err) {
-      console.error("Error eliminando tabla mensajes:", err);
-    } else {
-      console.log("✅ Tabla mensajes eliminada (si existía)");
-    }
-    
-  db.serialize(() => {
-  // Crear tabla mensajes SIN eliminarla
+  // Tabla mensajes
   db.run(`CREATE TABLE IF NOT EXISTS mensajes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero TEXT,
@@ -2093,6 +2084,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
