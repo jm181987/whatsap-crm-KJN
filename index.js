@@ -1484,23 +1484,29 @@ app.delete("/clientes/:numero", (req, res) => {
   });
 });
 
-// Rutas existentes de clientes
-app.get('/clientes', async (req, res) => { ... });
-app.put('/clientes/:numero/estado', async (req, res) => { ... });
-app.put('/clientes/:numero/nombre', async (req, res) => { ... });
-app.put('/clientes/:numero/nota', async (req, res) => { ... });
-app.delete('/clientes/:numero', async (req, res) => { ... });
-
-// ⬇️ AGREGAR AQUÍ - Nueva ruta para foto de perfil
-app.get('/clientes/:numero/foto', async (req, res) => {
+/* ========================================================
+   FOTO DE PERFIL DE WHATSAPP
+======================================================== */
+app.get("/clientes/:numero/foto", async (req, res) => {
+  const numero = decodeURIComponent(req.params.numero);
+  
   try {
-    const numero = req.params.numero;
-    const url = await sock.profilePictureUrl(numero, 'image');
-    res.json({ url });
+    if (!sock || sock.ws?.readyState !== 1) {
+      return res.status(503).json({ error: "WhatsApp no conectado" });
+    }
+    
+    const jid = numero.includes("@") ? numero : `${numero}@s.whatsapp.net`;
+    const profileUrl = await sock.profilePictureUrl(jid, "image");
+    
+    res.json({ url: profileUrl });
   } catch (error) {
+    // Si no tiene foto o hay error, devolver null
     res.json({ url: null });
   }
 });
+
+// Obtener TODOS los mensajes (para analytics)
+app.get("/mensajes", (req, res) => {
 
 
 // Enviar texto
