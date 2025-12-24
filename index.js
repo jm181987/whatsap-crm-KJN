@@ -1500,35 +1500,10 @@ app.get("/clientes/:numero/foto", async (req, res) => {
     
     res.json({ url: profileUrl });
   } catch (error) {
-    // Si no tiene foto o hay error, devolver null
     res.json({ url: null });
   }
 });
 
-// Obtener TODOS los mensajes (para analytics)
-app.get("/mensajes", (req, res) => {
-
-
-// Enviar texto
-app.post("/enviar", async (req, res) => {
-  const { numero, mensaje } = req.body;
-  
-  if (!sock) {
-    return res.status(500).json({ error: "WhatsApp no conectado" });
-  }
-
-  try {
-    await sock.sendMessage(numero, { text: mensaje });
-
-    const fecha = new Date().toISOString();
-    guardarMensajeEnDB(numero, mensaje, 'enviado', fecha, null, null, 0);
-
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("Error enviando mensaje:", e);
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // Envío masivo a TODOS los clientes
 app.post("/enviar-masivo", async (req, res) => {
@@ -2099,6 +2074,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
