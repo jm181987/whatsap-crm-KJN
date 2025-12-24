@@ -1484,6 +1484,25 @@ app.delete("/clientes/:numero", (req, res) => {
   });
 });
 
+// Rutas existentes de clientes
+app.get('/clientes', async (req, res) => { ... });
+app.put('/clientes/:numero/estado', async (req, res) => { ... });
+app.put('/clientes/:numero/nombre', async (req, res) => { ... });
+app.put('/clientes/:numero/nota', async (req, res) => { ... });
+app.delete('/clientes/:numero', async (req, res) => { ... });
+
+// ⬇️ AGREGAR AQUÍ - Nueva ruta para foto de perfil
+app.get('/clientes/:numero/foto', async (req, res) => {
+  try {
+    const numero = req.params.numero;
+    const url = await sock.profilePictureUrl(numero, 'image');
+    res.json({ url });
+  } catch (error) {
+    res.json({ url: null });
+  }
+});
+
+
 // Enviar texto
 app.post("/enviar", async (req, res) => {
   const { numero, mensaje } = req.body;
@@ -2074,6 +2093,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
