@@ -1491,7 +1491,8 @@ app.get("/clientes/:numero/foto", async (req, res) => {
   const numero = decodeURIComponent(req.params.numero);
   
   try {
-    if (!sock || sock.ws?.readyState !== 1) {
+    // Verificar conexión de forma más simple
+    if (!sock) {
       return res.status(503).json({ error: "WhatsApp no conectado" });
     }
     
@@ -1500,9 +1501,11 @@ app.get("/clientes/:numero/foto", async (req, res) => {
     
     res.json({ url: profileUrl });
   } catch (error) {
+    console.log(`No se pudo obtener foto para ${numero}:`, error.message);
     res.json({ url: null });
   }
 });
+
 
 
 // Envío masivo a TODOS los clientes
@@ -2074,6 +2077,7 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
+
 
 
 
