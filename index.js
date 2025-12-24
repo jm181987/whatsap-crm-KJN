@@ -1484,29 +1484,26 @@ app.delete("/clientes/:numero", (req, res) => {
   });
 });
 
-/* ========================================================
-   FOTO DE PERFIL DE WHATSAPP
-======================================================== */
-app.get("/clientes/:numero/foto", async (req, res) => {
-  const numero = decodeURIComponent(req.params.numero);
+// Enviar texto
+app.post("/enviar", async (req, res) => {
+  const { numero, mensaje } = req.body;
   
+  if (!sock) {
+    return res.status(500).json({ error: "WhatsApp no conectado" });
+  }
+
   try {
-    // Verificar conexión de forma más simple
-    if (!sock) {
-      return res.status(503).json({ error: "WhatsApp no conectado" });
-    }
-    
-    const jid = numero.includes("@") ? numero : `${numero}@s.whatsapp.net`;
-    const profileUrl = await sock.profilePictureUrl(jid, "image");
-    
-    res.json({ url: profileUrl });
-  } catch (error) {
-    console.log(`No se pudo obtener foto para ${numero}:`, error.message);
-    res.json({ url: null });
+    await sock.sendMessage(numero, { text: mensaje });
+
+    const fecha = new Date().toISOString();
+    guardarMensajeEnDB(numero, mensaje, 'enviado', fecha, null, null, 0);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Error enviando mensaje:", e);
+    res.status(500).json({ error: e.message });
   }
 });
-
-
 
 // Envío masivo a TODOS los clientes
 app.post("/enviar-masivo", async (req, res) => {
@@ -2077,10 +2074,6 @@ server.listen(3000, () => {
   iniciarWhatsApp();
 
 });
-
-
-
-
 
 
 
