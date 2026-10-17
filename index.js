@@ -410,16 +410,38 @@ async function iniciarWhatsApp() {
 /* ========================================================
    MANEJO DE MENSAJES
 ======================================================== */
+
+function phoneKey(jid) {
+  const value = String(jid || '');
+  if (!value.endsWith('@s.whatsapp.net') && !value.endsWith('@c.us')) return null;
+  return value.split('@')[0].split(':')[0].replace(/\\D/g, '');
+}
+
+async function resolveConversationJid(jid, alternativeJid) {
+  const candidates = [jid, alternativeJid].filter(Boolean);
+  for (const candidate of candidates) {
+    const existing = await db.query('SELECT numero FROM clientes WHERE numero = $1 LIMIT 1', [candidate]);
+    if (existing.length) return existing[0].numero;
+  }
+  const phones = candidates.map(phoneKey).filter(Boolean);
+  if (phones.length) {
+    const existing = await db.query("SELECT numero FROM clientes WHERE numero LIKE '%@s.whatsapp.net' OR numero LIKE '%@c.us'");
+    const match = existing.find(row => phones.includes(phoneKey(row.numero)));
+    if (match) return match.numero;
+  }
+  return alternativeJid && phoneKey(alternativeJid) ? alternativeJid : jid;
+}
+
 function configurarManejoMensajes() {
   
   sock.ev.on("messages.upsert", async (m) => {
     try {
       if (!m.messages || m.messages.length === 0) return;
 
-      const msg = m.messages[0];
+      for (const msg of m.messages) {
       
       // Ignorar mensajes propios y estados
-      if (msg.key.fromMe || !msg.message) return;
+      if (msg.key.fromMe || !msg.message || msg.key.remoteJid === "status@broadcast") continue;
 
       const numero = await resolveConversationJid(msg.key.remoteJid, msg.key.remoteJidAlt);
       const contacto = msg.pushName || "Desconocido";
