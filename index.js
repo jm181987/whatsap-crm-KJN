@@ -1362,6 +1362,22 @@ app.delete("/respuestas/:id", (req, res) => {
   });
 });
 
+// Agenda manual de contactos (sin requerir un mensaje entrante).
+app.post("/contactos", async (req,res) => {
+  const nombre=String(req.body?.nombre||"").trim();
+  const digits=String(req.body?.telefono||"").replace(/\D/g,"");
+  if(!nombre || digits.length<8 || digits.length>15)
+    return res.status(400).json({error:"Ingresá un nombre y un teléfono internacional válido (8-15 dígitos)."});
+  const numero=digits+"@s.whatsapp.net";
+  try {
+    const existing=await db.query("SELECT numero FROM clientes WHERE numero=$1",[numero]);
+    if(existing.rows.length)return res.status(409).json({error:"El contacto ya está agendado"});
+    await db.query("INSERT INTO clientes (numero,nombre,etiqueta,nota,archivado,ultima_interaccion) VALUES ($1,$2,$3,$4,$5,$6)",
+      [numero,nombre,"nuevo","",0,new Date().toISOString()]);
+    res.status(201).json({ok:true,numero,nombre});
+  }catch(e){console.error("Error agendando contacto:",e);res.status(500).json({error:"No se pudo guardar el contacto"})}
+});
+
 // Obtener clientes
 app.get("/clientes", (req, res) => {
   db.all("SELECT * FROM clientes ORDER BY ultima_interaccion DESC", (err, rows) => {
