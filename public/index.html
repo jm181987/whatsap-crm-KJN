@@ -1268,13 +1268,34 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
               const audioContainer = document.createElement("div");
               audioContainer.className = "msg-audio";
               
-              const audio = document.createElement("audio");
-              audio.controls = true;
-              if (m.archivo) audio.src = m.archivo;
-              else { audio.controls = false; audioContainer.appendChild(document.createTextNode("Audio recibido: archivo no disponible para reproducir.")); }
-              audio.style.width = "100%";
-              audioContainer.appendChild(audio);
-              
+              if (m.archivo) {
+                const audio = document.createElement("audio");
+                audio.controls = true;
+                audio.preload = "metadata";
+                audio.style.width = "100%";
+                audio.setAttribute("aria-label", "Reproducir audio de WhatsApp");
+                const source = document.createElement("source");
+                source.src = m.archivo;
+                source.type = m.mime_type || "audio/ogg";
+                audio.appendChild(source);
+                const status = document.createElement("small");
+                status.style.display = "block";
+                status.style.marginTop = "5px";
+                audio.addEventListener("error", () => { status.textContent = "No se pudo cargar el audio. Verificá el archivo en el servidor."; }, true);
+                audio.addEventListener("loadedmetadata", () => { status.textContent = ""; });
+                audioContainer.appendChild(audio);
+                audioContainer.appendChild(status);
+                const download = document.createElement("a");
+                download.href = m.archivo;
+                download.textContent = "⬇ Descargar audio";
+                download.setAttribute("download", "");
+                download.style.display = "inline-block";
+                download.style.marginTop = "5px";
+                audioContainer.appendChild(download);
+              } else {
+                audioContainer.textContent = "Audio recibido: archivo no disponible en el servidor.";
+              }
+
               if (m.mensaje && m.mensaje !== "(audio)" && m.mensaje !== "🎵 Audio") {
                 const caption = document.createElement("div");
                 caption.textContent = m.mensaje;
