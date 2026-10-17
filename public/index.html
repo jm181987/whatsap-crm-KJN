@@ -671,13 +671,35 @@
       .column { min-width:225px; padding:10px; }
       #search { max-width:100%; box-sizing:border-box; }
     }
+
+    /* Neutral WhatsApp-inspired palette; user-selectable light and dark. */
+    body { --wa-bg:#0b0b0b; --wa-panel:#171717; --wa-card:#232323; --wa-border:#373737; --wa-text:#f4f4f4; --wa-muted:#b9b9b9; background:var(--wa-bg)!important; color:var(--wa-text)!important; }
+    body[data-theme="light"] { --wa-bg:#f5f6f6; --wa-panel:#ffffff; --wa-card:#f0f2f3; --wa-border:#d7dce0; --wa-text:#171d20; --wa-muted:#58656c; color-scheme:light; }
+    body header,body .column,body #chat,body .nota-box,body .recordatorios-box { background:var(--wa-panel)!important; color:var(--wa-text)!important; border-color:var(--wa-border)!important; }
+    body .kanban { background:var(--wa-bg)!important; }
+    body .cliente { background:var(--wa-card)!important; color:var(--wa-text)!important; border:1px solid var(--wa-border)!important; }
+    body .cliente:hover { filter:brightness(.94); }
+    body .column { border-top:2px solid var(--wa-border)!important; }
+    body input,body textarea,body select { background:var(--wa-card); color:var(--wa-text); border:1px solid var(--wa-border); }
+    body #search { background:var(--wa-card)!important; color:var(--wa-text)!important; border-color:var(--wa-border)!important; }
+    .wa-report { background:var(--wa-panel); color:var(--wa-text); border-bottom:1px solid var(--wa-border); padding:12px 20px; max-height:45vh; overflow:auto; }
+    .wa-report[hidden] { display:none!important; }
+    .wa-report table { width:100%; border-collapse:collapse; font-size:13px; }
+    .wa-report th,.wa-report td { padding:9px; text-align:left; border-bottom:1px solid var(--wa-border); }
+    .wa-report .pending { color:var(--wa-text); padding:7px 0; border-bottom:1px solid var(--wa-border); }
+    .wa-report .muted { color:var(--wa-muted); }
+    .wa-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .wa-toolbar button { border:1px solid var(--wa-border); background:var(--wa-card); color:var(--wa-text); border-radius:8px; padding:8px 12px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>CRM WhatsApp</h1>
+    <h1>KNJ · Conversaciones</h1>
     <div>
       <input type="text" id="search" placeholder="Buscar...">
+      <button type="button" id="wa-theme" title="Cambiar tema">◐ Tema</button>
+      <button type="button" id="wa-reports">Informe diario</button>
+      <button type="button" id="wa-pending">Sin responder <span id="wa-pending-count">0</span></button>
       <button id="exportar">Exportar CSV</button>
       <button id="verGrafico">📊 Ver estadísticas</button>
       <button id="btnMasivoGlobal">📢 Todos</button>
@@ -686,6 +708,14 @@
     </div>
   </header>
 
+  <section id="wa-report" class="wa-report" hidden aria-live="polite">
+    <div class="wa-toolbar"><strong>Actividad de conversaciones</strong><label for="wa-days">Período</label>
+      <select id="wa-days"><option value="7">7 días</option><option value="14" selected>14 días</option><option value="30">30 días</option><option value="90">90 días</option></select>
+      <button type="button" id="wa-refresh">Actualizar</button><button type="button" id="wa-close">Cerrar</button>
+    </div>
+    <p id="wa-call-note" class="muted"></p>
+    <div id="wa-report-content"></div>
+  </section>
   <div class="kanban" id="kanban">
     <div class="column" data-etiqueta="nuevo" style="border-top:4px solid #00bcd4;"><h2>Nuevo</h2></div>
     <div class="column" data-etiqueta="callback" style="border-top:4px solid #f3e921;"><h2>Callback</h2></div>
@@ -2422,6 +2452,59 @@
       // Verificar inmediatamente al cargar
       setTimeout(verificarRecordatorios, 5000);
     }
+
+
+    // Daily reports and unanswered messages use server data, not browser guesses.
+    const waReport = document.getElementById('wa-report');
+    let waReportMode = 'daily';
+    let waLastPending = 0;
+    function waEscape(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+    function waSetTheme(theme) {
+      document.body.dataset.theme = theme;
+      localStorage.setItem('knj-crm-theme', theme);
+      document.getElementById('wa-theme').textContent = theme === 'dark' ? '☀ Modo claro' : '☾ Modo oscuro';
+    }
+    waSetTheme(localStorage.getItem('knj-crm-theme') === 'light' ? 'light' : 'dark');
+    document.getElementById('wa-theme').onclick = () => waSetTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
+    document.getElementById('wa-reports').onclick = () => { waReportMode='daily'; waReport.hidden=false; waRefreshReport(); };
+    document.getElementById('wa-pending').onclick = () => { waReportMode='pending'; waReport.hidden=false; waRefreshReport(); };
+    document.getElementById('wa-close').onclick = () => { waReport.hidden=true; };
+    document.getElementById('wa-refresh').onclick = waRefreshReport;
+    document.getElementById('wa-days').onchange = waRefreshReport;
+    async function waRefreshReport(silent=false) {
+      try {
+        const response = await fetch('/api/informes/conversaciones?dias=' + encodeURIComponent(document.getElementById('wa-days').value));
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        const pending = data.pending || [];
+        document.getElementById('wa-pending-count').textContent = pending.length;
+        if (pending.length > 0 && waLastPending === 0 && Notification.permission === 'granted') {
+          new Notification('KNJ CRM: mensajes sin responder', { body: pending.length + ' conversaciones requieren respuesta' });
+        }
+        waLastPending = pending.length;
+        if (silent && waReport.hidden) return;
+        document.getElementById('wa-call-note').textContent = 'Tiempo en llamadas: no disponible. WhatsApp no proporciona la duración de llamadas a esta integración.';
+        const root = document.getElementById('wa-report-content');
+        if (waReportMode === 'pending') {
+          root.innerHTML = '<h3>Conversaciones pendientes (' + pending.length + ')</h3>' +
+            (pending.length ? pending.map(x => '<div class="pending"><strong>' + waEscape(x.nombre) + '</strong> · ' + waEscape(x.numero) +
+            '<div class="muted">' + waEscape(x.ultimo_mensaje) + ' · ' + Math.max(0,Math.floor((x.espera_segundos||0)/60)) + ' min de espera</div></div>').join('') : '<p>No hay conversaciones pendientes.</p>');
+        } else {
+          root.innerHTML = '<table><thead><tr><th>Día</th><th>Conversaciones</th><th>Recibidos</th><th>Enviados</th><th>Total</th></tr></thead><tbody>' +
+            (data.daily||[]).map(x => '<tr><td>'+waEscape(x.dia)+'</td><td>'+x.conversaciones+'</td><td>'+x.recibidos+'</td><td>'+x.enviados+'</td><td>'+x.mensajes+'</td></tr>').join('') +
+            '</tbody></table>';
+        }
+      } catch(err) {
+        console.error('Informe:',err);
+        if (!silent) document.getElementById('wa-report-content').textContent='No se pudo cargar el informe. Revisá el servidor.';
+      }
+    }
+    setInterval(() => waRefreshReport(true), 60000);
+    document.getElementById('wa-pending').addEventListener('click', () => {
+      if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+    });
 
     // Inicialización completa
     window.addEventListener('load', () => {
