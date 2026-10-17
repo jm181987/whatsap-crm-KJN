@@ -926,7 +926,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <h3>Editar contacto</h3>
       <label>Nombre <input id="wa-edit-name" required maxlength="100" autocomplete="off"></label>
       <label>Identificador de WhatsApp <input id="wa-edit-number" readonly></label>
-      <small>El identificador no se modifica para proteger los mensajes. Para asociar un @lid con un teléfono, usá Vincular.</small>
+      <small>El identificador no se modifica para proteger los mensajes. Para asociar un @lid con un teléfono, usá Vincular.</small><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="wa-export-vcf">📱 Guardar en teléfono (.vcf)</button><button type="button" id="wa-sync-google">🔄 Google Contacts</button></div><small id="wa-google-state">Consultando conexión...</small><button type="button" id="wa-google-connect">Conectar Google Contacts</button>
       <p id="wa-edit-error" role="alert" style="color:#ff7373"></p>
       <div style="display:flex;gap:8px"><button type="submit">Guardar cambios</button><button type="button" id="wa-edit-cancel">Cancelar</button></div>
     </form>
@@ -1228,7 +1228,39 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       document.getElementById('wa-edit-number').value=c.numero;
       document.getElementById('wa-edit-error').textContent='';
       editDialog.showModal();
+      refreshGoogleContactsState();
     }
+    async function refreshGoogleContactsState(){
+      const status=document.getElementById('wa-google-state');
+      const connect=document.getElementById('wa-google-connect');
+      try{
+        const response=await fetch('/google-contacts/status');
+        const data=await response.json();
+        if(!response.ok)throw Error(data.error||'Error de conexión');
+        status.textContent=data.connected?'Google Contacts conectado':data.configured?'Google Contacts sin conectar':'Google Contacts requiere configurar OAuth en Coolify';
+        connect.hidden=data.connected;
+        document.getElementById('wa-sync-google').disabled=!data.connected;
+      }catch(e){status.textContent=e.message;connect.hidden=false;document.getElementById('wa-sync-google').disabled=true}
+    }
+    document.getElementById('wa-google-connect').onclick=()=>{window.open('/google-contacts/connect','googleContactsOAuth','width=650,height=720');};
+    document.getElementById('wa-export-vcf').onclick=()=>{
+      if(!editingNumber)return;
+      window.location.href='/contactos/'+encodeURIComponent(editingNumber)+'/vcf';
+    };
+    document.getElementById('wa-sync-google').onclick=async()=>{
+      const button=document.getElementById('wa-sync-google');
+      const status=document.getElementById('wa-google-state');
+      if(!editingNumber)return;
+      button.disabled=true;
+      status.textContent='Sincronizando...';
+      try{
+        const res=await fetch('/google-contacts/sync/'+encodeURIComponent(editingNumber),{method:'POST'});
+        const data=await res.json();
+        if(!res.ok)throw Error(data.error||'No se pudo sincronizar');
+        status.textContent=data.action==='updated'?'Contacto actualizado en Google':'Contacto creado en Google';
+      }catch(e){status.textContent=e.message}
+      finally{button.disabled=false}
+    };
     document.getElementById('wa-edit-cancel').onclick=()=>editDialog.close();
     document.getElementById('wa-edit-form').onsubmit=async event=>{
       event.preventDefault();
