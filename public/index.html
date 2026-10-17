@@ -1258,7 +1258,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
           div.className = `msg ${m.tipo === 'enviado' ? 'enviado' : 'recibido'}`;
 
           // Mostrar archivos multimedia
-          if (m.archivo && m.es_multimedia) {
+          if (m.es_multimedia && (m.archivo || /^audio\\/|^video\\//.test(m.mime_type || ""))) {
             if (m.mime_type && m.mime_type.startsWith('audio/')) {
               // Audio
               const audioContainer = document.createElement("div");
@@ -1266,7 +1266,8 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
               
               const audio = document.createElement("audio");
               audio.controls = true;
-              audio.src = m.archivo;
+              if (m.archivo) audio.src = m.archivo;
+              else { audio.controls = false; audioContainer.appendChild(document.createTextNode("Audio recibido: archivo no disponible para reproducir.")); }
               audio.style.width = "100%";
               audioContainer.appendChild(audio);
               
@@ -1315,7 +1316,8 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
               
               const video = document.createElement("video");
               video.controls = true;
-              video.src = m.archivo;
+              if (m.archivo) video.src = m.archivo;
+              else { video.controls = false; videoContainer.appendChild(document.createTextNode("Video recibido: archivo no disponible para reproducir.")); }
               video.preload = "metadata";
               video.onerror = () => { videoContainer.appendChild(document.createTextNode("Video no disponible. Verificá el volumen /app/public/videos.")); };
               video.style.width = "100%";
