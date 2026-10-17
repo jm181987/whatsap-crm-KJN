@@ -515,7 +515,7 @@ async function procesarMensajeAudio(msg, numero, contacto, fecha) {
 
     // Guardar en base de datos
     const mensajeTexto = audioMessage.caption || "🎵 Audio";
-    guardarMensajeEnDB(numero, mensajeTexto, 'recibido', fecha, `/audios/${fileName}`, 'audio/ogg', 1);
+    await guardarMensajeEnDB(numero, mensajeTexto, 'recibido', fecha, `/audios/${fileName}`, 'audio/ogg', 1);
     
     actualizarCliente(numero, contacto, fecha);
     crearNotificacion(numero, contacto, "🎵 Audio", fecha);
@@ -581,7 +581,7 @@ async function procesarMensajeVideo(msg, numero, contacto, fecha) {
 
     // Guardar en base de datos
     const mensajeTexto = videoMessage.caption || "🎥 Video";
-    guardarMensajeEnDB(numero, mensajeTexto, 'recibido', fecha, `/videos/${fileName}`, videoMessage.mimetype, 1);
+    await guardarMensajeEnDB(numero, mensajeTexto, 'recibido', fecha, `/videos/${fileName}`, videoMessage.mimetype, 1);
     
     actualizarCliente(numero, contacto, fecha);
     crearNotificacion(numero, contacto, "🎥 Video", fecha);
