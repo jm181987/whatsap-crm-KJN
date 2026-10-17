@@ -648,6 +648,29 @@
     #inputAudio, #inputImagen, #inputDocumento {
       display: none;
     }
+
+    /* KNJ CRM — refined workspace design */
+    :root { color-scheme: dark; --surface:#151d29; --surface-2:#1d2938; --line:#304154; --accent:#32d6a1; --muted:#a9bacb; }
+    body { background:#0c1420; color:#eaf2f8; font-family:'Poppins',sans-serif; margin-bottom:0; }
+    header { background:#111e2d; color:#f1f7fb; border-bottom:1px solid var(--line); padding:14px 22px; gap:12px; }
+    header h1 { font-size:20px; font-weight:600; letter-spacing:-.4px; }
+    #search { background:#1b2a3b; border:1px solid #3a4e63; color:#fff; border-radius:10px; padding:10px 12px; }
+    #search:focus { outline:2px solid var(--accent); outline-offset:1px; }
+    .kanban { background:#0c1420; padding:16px; gap:14px; }
+    .column { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; box-shadow:0 8px 28px #0002; }
+    .column h2 { text-align:left; font-size:14px; font-weight:600; padding-bottom:12px; border-color:var(--line); }
+    .cliente { border:1px solid #354657; background:var(--surface-2); border-radius:10px; padding:12px; margin-bottom:9px; cursor:pointer; }
+    .cliente:hover { background:#293c4d; border-color:#4d8e82; transform:translateY(-1px); }
+    button { cursor:pointer; transition:background .18s,transform .18s; }
+    button:focus-visible, a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    #mensajes { scrollbar-color:#466074 transparent; }
+    .msg img,.msg video { display:block; max-width:min(100%,360px); border-radius:10px; }
+    @media(max-width:760px) {
+      header { padding:12px; }
+      .kanban { padding:8px; gap:8px; }
+      .column { min-width:225px; padding:10px; }
+      #search { max-width:100%; box-sizing:border-box; }
+    }
   </style>
 </head>
 <body>
@@ -1068,6 +1091,8 @@
               
               const img = document.createElement("img");
               img.src = m.archivo;
+              img.loading = "lazy";
+              img.onerror = () => { img.alt = "Imagen no disponible en el servidor"; imgContainer.appendChild(document.createTextNode("Imagen no disponible. Verificá el volumen /app/public/imagenes.")); };
               img.alt = "Imagen";
               img.style.cursor = "pointer";
               img.style.maxWidth = "100%";
@@ -1094,6 +1119,8 @@
               const video = document.createElement("video");
               video.controls = true;
               video.src = m.archivo;
+              video.preload = "metadata";
+              video.onerror = () => { videoContainer.appendChild(document.createTextNode("Video no disponible. Verificá el volumen /app/public/videos.")); };
               video.style.width = "100%";
               video.style.maxWidth = "250px";
               video.style.borderRadius = "8px";
