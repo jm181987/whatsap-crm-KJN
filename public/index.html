@@ -800,6 +800,18 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
 .wa-overlay-backdrop { position:fixed;inset:0;z-index:1040;background:#0006; }
 #wa-contact-panel.open { z-index:1060; }
 #wa-report { z-index:1080; }
+
+/* Compact follow-up tools: expand only when needed, keep messages prominent. */
+#chat .nota-box,#chat .recordatorios-box{margin:4px 12px!important;padding:6px 10px!important;flex:0 0 auto;min-height:0;max-width:calc(100% - 24px);box-sizing:border-box}
+#chat .nota-box h3,#chat .recordatorios-box h3{margin:0!important;min-height:30px;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#chat .nota-box h3 #toggleNota{margin-left:auto}
+#chat #wa-note-expand{background:transparent;border:0;color:var(--wa-text);font:inherit;text-align:left;cursor:pointer;padding:5px 2px}
+#chat #nota{display:none;width:100%;box-sizing:border-box;min-height:55px;max-height:min(22vh,180px);height:70px;overflow-y:auto;margin-top:5px;resize:vertical;font-size:13px}
+#chat .nota-box.wa-expanded #nota{display:block}
+#chat #listaRecordatorios{max-height:min(24vh,190px)!important;overflow-y:auto;margin-top:5px!important}
+#chat #toggleRecordatorios,#chat #nuevoRecordatorio,#chat #toggleNota{padding:5px 8px;font-size:11px;white-space:nowrap}
+#chat #mensajes{min-height:100px;flex:1 1 auto;overflow-y:auto}
+@media(max-width:600px){#chat .nota-box,#chat .recordatorios-box{margin:3px 7px!important;max-width:calc(100% - 14px)}#chat .nota-box h3,#chat .recordatorios-box h3{font-size:11px}}
   </style>
 </head>
 <body>
@@ -855,7 +867,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
     <header><span id="chat-header"></span><button id="cerrarChat">❌</button></header>
 
     <div class="nota-box">
-      <h3>📝 Nota del contacto <button id="toggleNota">Editar</button></h3>
+      <h3><button type="button" id="wa-note-expand" aria-expanded="false" aria-controls="nota" title="Mostrar u ocultar nota">▸ 📝 Nota del contacto</button><button id="toggleNota">Editar</button></h3>
       <textarea id="nota" placeholder="Escribe una nota..." readonly></textarea>
     </div>
 
@@ -2784,6 +2796,17 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       waPendingBadge.classList.toggle('has-pending',count>0);
     });
     waPendingObserver.observe(waPendingCount,{childList:true,characterData:true,subtree:true});
+
+
+    const waNoteExpand=document.getElementById('wa-note-expand');
+    const waNoteContainer=document.querySelector('#chat .nota-box');
+    function waSetNoteExpanded(open) {
+      waNoteContainer.classList.toggle('wa-expanded',open);
+      waNoteExpand.setAttribute('aria-expanded',String(open));
+      waNoteExpand.textContent=(open?'▾':'▸')+' 📝 Nota del contacto';
+    }
+    waNoteExpand.addEventListener('click',()=>waSetNoteExpanded(!waNoteContainer.classList.contains('wa-expanded')));
+    document.getElementById('toggleNota').addEventListener('click',()=>waSetNoteExpanded(true));
 
     // Inicialización completa
     window.addEventListener('load', () => {
