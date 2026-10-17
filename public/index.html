@@ -841,8 +841,15 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       <button type="button" id="wa-pending" hidden>Sin responder <span id="wa-pending-count">0</span></button>
       <button id="exportar">Exportar CSV</button>
       <button id="verGrafico" hidden>📊 Ver estadísticas</button>
-      <button id="btnMasivoGlobal">📢 Todos</button>
-      <button id="btnMasivoEstado">📊 Por Estado</button>
+      <label for="wa-envio-tipo">📤 Envío</label>
+      <select id="wa-envio-tipo" aria-label="Destinatarios del envío" style="padding:8px;border-radius:7px">
+        <option value="">Seleccionar destinatarios…</option>
+        <option value="todos">Todos los contactos</option>
+        <option value="estado">Por estado Kanban</option>
+        <option value="lista">Lista específica</option>
+      </select>
+      <button id="btnMasivoGlobal" hidden>📢 Todos</button>
+      <button id="btnMasivoEstado" hidden>📊 Por Estado</button>
       <!-- Botones se crearán dinámicamente -->
     </div>
   </header>
@@ -2015,7 +2022,16 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       // Agregar al header
       const headerDiv = document.querySelector("header div");
       headerDiv.appendChild(btnSubirContactos);
+      btnEnviarLista.hidden = true;
       headerDiv.appendChild(btnEnviarLista);
+      const envioSelector=document.getElementById('wa-envio-tipo');
+      envioSelector.addEventListener('change',()=>{
+        const modo=envioSelector.value;
+        envioSelector.value='';
+        if(modo==='todos')document.getElementById('btnMasivoGlobal').click();
+        if(modo==='estado')document.getElementById('btnMasivoEstado').click();
+        if(modo==='lista')btnEnviarLista.click();
+      });
 
       // Event listeners
       btnSubirContactos.onclick = () => {
