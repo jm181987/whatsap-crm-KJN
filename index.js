@@ -857,6 +857,25 @@ app.post("/enviar-imagen", upload.single("imagen"), async (req, res) => {
   }
 });
 
+// ENVÍO DE VIDEO DESDE CRM
+app.post("/enviar-video", upload.single("video"), async (req, res) => {
+  if (!sock) return res.status(503).json({ error: "WhatsApp no conectado" });
+  if (!req.body.numero || !req.file) return res.status(400).json({ error: "Contacto y video requeridos" });
+  if (!req.file.mimetype?.startsWith("video/")) return res.status(400).json({ error: "El archivo no es un video" });
+  try {
+    const buffer = fs.readFileSync(req.file.path);
+    await sock.sendMessage(req.body.numero, {
+      video: buffer, mimetype: req.file.mimetype, caption: req.body.caption || ""
+    });
+    await guardarMensajeEnDB(req.body.numero, req.body.caption || "🎥 Video", "enviado",
+      new Date().toISOString(), "/videos/" + req.file.filename, req.file.mimetype, 1);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Error enviando video:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ENVÍO DE DOCUMENTO/ARCHIVO DESDE CRM
 app.post("/enviar-documento", upload.single("documento"), async (req, res) => {
   try {
