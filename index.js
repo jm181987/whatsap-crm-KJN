@@ -11,8 +11,9 @@ import {
 import qrcode from "qrcode";
 import fs from "fs";
 import multer from "multer";
-import sqlite3 from "sqlite3";
+import { db, initDatabase } from "./postgres.js";
 import http from "http";
+import { timingSafeEqual } from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Parser } from "json2csv";
@@ -20,65 +21,43 @@ import { Parser } from "json2csv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false }));
 const server = http.createServer(app);
 
+// Require an explicit access password before serving the CRM or its API.
+const crmUser = process.env.CRM_USER;
+const crmPassword = process.env.CRM_PASSWORD;
+if (!crmUser || !crmPassword) throw new Error("Configure CRM_USER y CRM_PASSWORD en Coolify");
+function secureEqual(a, b) {
+  const aa = Buffer.from(a), bb = Buffer.from(b);
+  return aa.length === bb.length && timingSafeEqual(aa, bb);
+}
+app.use((req, res, next) => {
+  const header = req.headers.authorization || "";
+  if (header.startsWith("Basic ")) {
+    try {
+      const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+      const separator = decoded.indexOf(":");
+      if (separator !== -1 && secureEqual(decoded.slice(0, separator), crmUser) && secureEqual(decoded.slice(separator + 1), crmPassword)) return next();
+    } catch {}
+  }
+  res.setHeader("WWW-Authenticate", 'Basic realm="KNJ WhatsApp CRM"');
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(401).send("Autenticación requerida");
+});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Crear directorios necesarios si no existen
-const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', 'session'];
+const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', process.env.SESSION_DIR || 'session'];
 directories.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-const db = new sqlite3.Database("crm.db");
-
-/* ========================================================
-   BASE DE DATOS - ESTRUCTURA COMPLETA
-======================================================== */
-db.serialize(() => {
-  // Tabla mensajes
-  db.run(`CREATE TABLE IF NOT EXISTS mensajes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    numero TEXT,
-    mensaje TEXT,
-    tipo TEXT,
-    fecha TEXT,
-    archivo TEXT,
-    mime_type TEXT,
-    es_multimedia INTEGER DEFAULT 0
-  )`);
-
-  // Tabla clientes
-  db.run(`CREATE TABLE IF NOT EXISTS clientes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    numero TEXT UNIQUE,
-    nombre TEXT,
-    etiqueta TEXT DEFAULT 'nuevo',
-    ultima_interaccion TEXT,
-    archivado INTEGER DEFAULT 0,
-    nota TEXT DEFAULT ''
-  )`);
-
-  // Tabla respuestas
-  db.run(`CREATE TABLE IF NOT EXISTS respuestas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    texto TEXT NOT NULL
-  )`);
-
-  // Tabla recordatorios (solo UNA definición)
-  db.run(`CREATE TABLE IF NOT EXISTS recordatorios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    numero TEXT NOT NULL,
-    fecha_recordatorio TEXT NOT NULL,
-    mensaje TEXT,
-    completado INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )`);
-}); // ← Solo UN cierre aquí
+await initDatabase();
 
 let sock;
 
@@ -370,7 +349,7 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 ======================================================== */
 async function iniciarWhatsApp() {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState("session");
+    const { state, saveCreds } = await useMultiFileAuthState(process.env.SESSION_DIR || "session");
     const { version } = await fetchLatestBaileysVersion();
 
     sock = makeWASocket({
@@ -1793,18 +1772,6 @@ app.get("/dashboard/actividad-7dias", (req, res) => {
   });
 });
 
-// Endpoint para obtener mensajes
-app.get('/mensajes', async (req, res) => {
-  try {
-    // Ajusta según tu base de datos
-    const mensajes = await db.query('SELECT * FROM mensajes ORDER BY fecha DESC');
-    res.json(mensajes);
-  } catch (error) {
-    console.error('Error fetching mensajes:', error);
-    res.status(500).json({ error: 'Error al obtener mensajes' });
-  }
-});
-
 /* ========================================================
    ENVÍO A LISTA ESPECÍFICA DE CONTACTOS
 ======================================================== */
@@ -2065,7 +2032,7 @@ app.post("/enviar-masivo-variantes", async (req, res) => {
    INICIAR SERVIDOR
 ======================================================== */
 
-server.listen(3000, () => {
+server.listen(Number(process.env.PORT || 3000), () => {
   console.log("🟢 CRM activo en http://localhost:3000");
   console.log("🗄️ Base de datos inicializada");
   console.log("📱 Sistema listo para conectar WhatsApp");
