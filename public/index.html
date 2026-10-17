@@ -1226,6 +1226,25 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
             indicador.className = 'indicador';
             if (localStorage.getItem(`draft_${c.numero}`)) indicador.style.display = 'block';
 
+            if(c.numero.endsWith('@lid')){
+              const link=document.createElement('button');
+              link.type='button';link.textContent='🔗 Vincular';
+              link.title='Vincular este chat con un contacto agendado';
+              link.onclick=async e=>{
+                e.stopPropagation();
+                const telefono=prompt('Número del contacto existente con código de país (ej.: 59893867429):');
+                if(!telefono)return;
+                if(!confirm('¿Asociar este chat con el contacto '+telefono+'? No se borrarán mensajes.'))return;
+                try{
+                  const response=await fetch('/contactos/vincular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lid:c.numero,telefono})});
+                  const data=await response.json();
+                  if(!response.ok)throw new Error(data.error||'Error de vinculación');
+                  alert('Identificadores vinculados. Los registros históricos permanecen intactos.');
+                  await cargarClientes();
+                }catch(err){alert(err.message)}
+              };
+              div.appendChild(link);
+            }
             div.append(nombre, eliminar, indicador);
             div.dataset.numero = c.numero;
             div.onclick = () => abrirChat(c);
