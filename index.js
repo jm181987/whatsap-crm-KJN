@@ -1423,6 +1423,13 @@ app.post("/contactos/vincular", async (req,res)=>{
       const source=(await query("SELECT * FROM clientes WHERE numero=$1 FOR UPDATE",[lid])).rows[0];
       if(!target)throw Object.assign(new Error("Primero agendá el teléfono"),{status:404});
       if(!source) {
+        const messageCount=(await query("SELECT COUNT(*)::int AS total FROM mensajes WHERE numero=$1",[lid])).rows[0]?.total||0;
+        if(messageCount>0) {
+          const moved=await query("UPDATE mensajes SET numero=$1 WHERE numero=$2",[numero,lid]);
+          await query("UPDATE recordatorios SET numero=$1 WHERE numero=$2",[numero,lid]);
+          await query("INSERT INTO contacto_aliases(alias,numero) VALUES($1,$2) ON CONFLICT(alias) DO UPDATE SET numero=EXCLUDED.numero",[lid,numero]);
+          return {moved:moved.rowCount,sourceRecovered:true};
+        }
         const existing=(await query("SELECT numero FROM contacto_aliases WHERE alias=$1",[lid])).rows[0];
         if(existing?.numero===numero)return {already:true};
         throw Object.assign(new Error("El chat LID no existe o ya fue vinculado"),{status:404});
@@ -1444,7 +1451,7 @@ app.post("/contactos/vincular", async (req,res)=>{
       return {moved:moved.rowCount};
     });
     res.json({ok:true,numero,...result});
-  }catch(e){console.error("Error vinculando:",e);res.status(e.status||500).json({error:e.status?e.message:"No se pudo completar la vinculación; no se modificaron los datos"})}
+  }catch(e){console.error("Error vinculando:",e);res.status(e.status||500).json({error:e.status?e.message:"Error de base de datos al vincular: "+e.message,code:e.code||null})}
 });
 
 // Obtener clientes
