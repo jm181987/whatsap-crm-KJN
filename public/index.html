@@ -1258,7 +1258,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
           div.className = `msg ${m.tipo === 'enviado' ? 'enviado' : 'recibido'}`;
 
           // Mostrar archivos multimedia
-          if (m.es_multimedia && (m.archivo || /^audio\\/|^video\\//.test(m.mime_type || ""))) {
+          if (m.es_multimedia && (m.archivo || (m.mime_type || "").startsWith("audio/") || (m.mime_type || "").startsWith("video/"))) {
             if (m.mime_type && m.mime_type.startsWith('audio/')) {
               // Audio
               const audioContainer = document.createElement("div");
