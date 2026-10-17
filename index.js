@@ -1367,27 +1367,29 @@ app.post("/contactos", async (req,res) => {
   const nombre=String(req.body?.nombre||"").trim();
   const digits=String(req.body?.telefono||"").replace(/\D/g,"");
   if(!nombre || digits.length<8 || digits.length>15)
-    return res.status(400).json({error:"Ingresá un nombre y un teléfono internacional válido (8-15 dígitos)."});
+    return res.status(400).json({error:"Ingresá nombre y teléfono con código de país (8-15 dígitos)."});
   const numero=digits+"@s.whatsapp.net";
   try {
-    const existing=await db.query("SELECT numero FROM clientes WHERE numero=$1",[numero]);
-    if(existing.length)return res.status(409).json({error:"El contacto ya está agendado"});
-    await db.query("INSERT INTO clientes (numero,nombre,etiqueta,nota,archivado,ultima_interaccion) VALUES ($1,$2,$3,$4,$5,$6)",
-      [numero,nombre,"nuevo","",0,new Date().toISOString()]);
+    const existing=await db.query("SELECT numero FROM clientes WHERE split_part(split_part(numero,'@',1),':',1) = $1 LIMIT 1",[digits]);
+    if(existing.length)return res.status(409).json({error:"Ya existe un contacto con ese teléfono"});
+    const result=await db.query("INSERT INTO clientes (numero,nombre,etiqueta,nota,archivado,ultima_interaccion) VALUES ($1,$2,'nuevo','',0,$3) ON CONFLICT (numero) DO NOTHING RETURNING numero",[numero,nombre,new Date().toISOString()]);
+    if(!result.length)return res.status(409).json({error:"El contacto ya está agendado"});
     res.status(201).json({ok:true,numero,nombre});
   }catch(e){console.error("Error agendando contacto:",e);res.status(500).json({error:"No se pudo guardar el contacto"})}
 });
 
 // Obtener clientes
-app.get("/clientes", (req, res) => {
-  db.all("SELECT * FROM clientes ORDER BY ultima_interaccion DESC", (err, rows) => {
-    if (err) {
-      console.error("Error obteniendo clientes:", err);
-      res.status(500).json({ error: "Error interno" });
-    } else {
-      res.json(rows);
-    }
-  });
+app.get("/clientes", async (req,res)=>{
+  try{
+    const rows=await db.query("SELECT * FROM clientes ORDER BY ultima_interaccion DESC NULLS LAST");
+    const seen=new Set();
+    const unique=rows.filter(row=>{
+      const key=phoneKey(row.numero)||row.numero;
+      if(seen.has(key))return false;
+      seen.add(key);return true;
+    });
+    res.json(unique);
+  }catch(e){console.error("Error obteniendo clientes:",e);res.status(500).json({error:"Error interno"})}
 });
 
 // Cambiar estado
