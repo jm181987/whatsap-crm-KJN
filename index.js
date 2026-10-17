@@ -13,6 +13,7 @@ import fs from "fs";
 import multer from "multer";
 import { db, initDatabase } from "./postgres.js";
 import http from "http";
+import { timingSafeEqual } from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Parser } from "json2csv";
@@ -24,6 +25,27 @@ const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(x => x.tr
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false }));
 const server = http.createServer(app);
 
+// Require an explicit access password before serving the CRM or its API.
+const crmUser = process.env.CRM_USER;
+const crmPassword = process.env.CRM_PASSWORD;
+if (!crmUser || !crmPassword) throw new Error("Configure CRM_USER y CRM_PASSWORD en Coolify");
+function secureEqual(a, b) {
+  const aa = Buffer.from(a), bb = Buffer.from(b);
+  return aa.length === bb.length && timingSafeEqual(aa, bb);
+}
+app.use((req, res, next) => {
+  const header = req.headers.authorization || "";
+  if (header.startsWith("Basic ")) {
+    try {
+      const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+      const separator = decoded.indexOf(":");
+      if (separator !== -1 && secureEqual(decoded.slice(0, separator), crmUser) && secureEqual(decoded.slice(separator + 1), crmPassword)) return next();
+    } catch {}
+  }
+  res.setHeader("WWW-Authenticate", 'Basic realm="KNJ WhatsApp CRM"');
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(401).send("Autenticación requerida");
+});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
