@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import express from "express";
 import cors from 'cors';
 
@@ -765,48 +767,47 @@ async function sincronizarChats() {
 ======================================================== */
 
 // ENVÍO DE AUDIO DESDE CRM
+const execFileAsync = promisify(execFile);
+// Convert browser-recorded WebM/MP4 into WhatsApp-compatible Ogg/Opus voice notes.
 app.post("/enviar-audio", upload.single("audio"), async (req, res) => {
+  const numero = req.body?.numero;
+  if (!sock?.user) return res.status(503).json({ error: "WhatsApp no está conectado" });
+  if (!numero || !req.file) return res.status(400).json({ error: "Contacto y audio requeridos" });
+  const source = req.file.path;
+  const isRecording = /^nota_voz_/i.test(req.file.originalname || "");
+  let filePath = source;
+  let mime = req.file.mimetype || "audio/ogg";
   try {
-    console.log("🎤 Iniciando envío de audio...");
-    
-    if (!sock) {
-      return res.status(500).json({ error: "WhatsApp no conectado" });
+    if (!fs.statSync(source).size) throw new Error("La grabación está vacía");
+    if (isRecording) {
+      const convertedName = "voz_" + Date.now() + "_" + Math.random().toString(36).slice(2,8) + ".ogg";
+      const convertedPath = path.join(__dirname, "public", "audios", convertedName);
+      await execFileAsync("ffmpeg", [
+        "-hide_banner", "-loglevel", "error", "-y", "-i", source,
+        "-vn", "-ac", "1", "-ar", "48000", "-c:a", "libopus",
+        "-b:a", "32k", "-application", "voip", convertedPath
+      ], { timeout: 120000 });
+      filePath = convertedPath;
+      mime = "audio/ogg; codecs=opus";
     }
-
-    const numero = req.body.numero;
-    if (!numero) {
-      return res.status(400).json({ error: "Número requerido" });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: "Archivo de audio requerido" });
-    }
-
-    const filePath = req.file.path;
-    const fileName = req.file.filename;
-
-    console.log("📁 Audio a enviar:", fileName, "a:", numero);
-
-    // Leer archivo como buffer
     const buffer = fs.readFileSync(filePath);
-    console.log("📊 Tamaño del audio:", buffer.length, "bytes");
-
+    if (!buffer.length) throw new Error("El archivo de audio convertido está vacío");
     await sock.sendMessage(numero, {
       audio: buffer,
-      mimetype: req.file.mimetype,
+      mimetype: mime,
+      ...(isRecording ? { ptt: true } : {})
     });
-
-    console.log("✅ Audio enviado a WhatsApp");
-
-    // Guardar mensaje en DB
-    const fecha = new Date().toISOString();
-    guardarMensajeEnDB(numero, "🎵 Audio", 'enviado', fecha, `/audios/${fileName}`, req.file.mimetype, 1);
-
-    res.json({ ok: true, archivo: fileName });
-
+    const archivo = "/audios/" + path.basename(filePath);
+    await guardarMensajeEnDB(numero, "🎵 Audio", "enviado", new Date().toISOString(), archivo, mime, 1);
+    console.log("✅ Audio enviado y guardado:", archivo, numero);
+    res.json({ ok: true, archivo });
   } catch (e) {
-    console.log("❌ Error enviando audio:", e);
-    res.status(500).json({ error: e.message });
+    console.error("❌ Error enviando audio:", e);
+    res.status(500).json({ error: "No se pudo enviar la nota de voz: " + e.message });
+  } finally {
+    if (filePath !== source) {
+      try { fs.unlinkSync(source); } catch {}
+    }
   }
 });
 
