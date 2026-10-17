@@ -1585,33 +1585,48 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
     };
 
     // Notificaciones
+    const waSeenNotifications = new Set();
     async function checkNotificaciones() {
       try {
-        const res = await fetch("/notify.json?_=" + Date.now());
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.numero) {
-            notif.play();
-
-            const cliente = document.querySelector(`.cliente[data-numero="${data.numero}"]`);
-            if (cliente) {
-              const indicador = cliente.querySelector(".indicador");
-              indicador.style.display = "block";
-              cliente.style.boxShadow = "0 0 10px #d6d6d6";
-              setTimeout(() => (cliente.style.boxShadow = "none"), 2000);
-            }
-
-            const alerta = document.createElement("div");
-            alerta.className = "alerta";
-            alerta.textContent = `💬 Nuevo mensaje de ${data.nombre}: ${data.mensaje || ""}`;
-            document.body.appendChild(alerta);
-            setTimeout(() => alerta.remove(), 4000);
-
-            fetch("/notify.json", { method: "DELETE" });
-          }
+        const res = await fetch("/notify.json?_=" + Date.now(), {cache:'no-store'});
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !data.numero) return;
+        const key = [data.numero,data.fecha,data.mensaje].join('|');
+        if (waSeenNotifications.has(key)) return;
+        waSeenNotifications.add(key);
+        if (waSeenNotifications.size > 100) waSeenNotifications.delete(waSeenNotifications.values().next().value);
+        // Refresh the inbox before highlighting: new contacts might not exist in the DOM yet.
+        await cargarClientes();
+        const allFilter = document.querySelector('#wa-filterbar button[data-filter="all"]');
+        if (allFilter && !allFilter.classList.contains('active')) allFilter.click();
+        const cliente = [...document.querySelectorAll('.cliente[data-numero]')].find(el => el.dataset.numero === data.numero);
+        if (cliente) {
+          const col=cliente.closest('.column');
+          if (col) col.style.display='';
+          const indicador=cliente.querySelector('.indicador');
+          if (indicador) indicador.style.display='block';
+          cliente.classList.add('wa-unread');
+          cliente.scrollIntoView({block:'nearest',behavior:'smooth'});
         }
-      } catch (error) {
-        console.error('Error verificando notificaciones:', error);
+        if (typeof notif !== 'undefined') notif.play().catch(()=>{});
+        const alerta=document.createElement('button');
+        alerta.type='button';
+        alerta.className='alerta';
+        alerta.textContent='💬 Nuevo mensaje de '+(data.nombre||data.numero)+': '+(data.mensaje||'');
+        alerta.style.cursor='pointer';
+        alerta.onclick=async()=> {
+          const match=[...document.querySelectorAll('.cliente[data-numero]')].find(el=>el.dataset.numero===data.numero);
+          if(match) match.click();
+          else { const contacts=await fetch('/clientes').then(r=>r.json()); const contact=contacts.find(c=>c.numero===data.numero); if(contact) abrirChat(contact); }
+          alerta.remove();
+        };
+        document.body.appendChild(alerta);
+        setTimeout(()=>alerta.remove(),9000);
+        if (clienteActual && clienteActual.numero===data.numero) await cargarMensajes(data.numero);
+        await fetch('/notify.json',{method:'DELETE'});
+      } catch(error) {
+        console.error('Error verificando notificaciones:',error);
       }
     }
 
