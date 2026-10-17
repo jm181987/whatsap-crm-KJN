@@ -452,29 +452,30 @@ function configurarManejoMensajes() {
       // Manejar mensajes de audio
       if (msg.message.audioMessage) {
         await procesarMensajeAudio(msg, numero, contacto, fecha);
-        return;
+        continue;
       }
 
       // Manejar mensajes de imagen
       if (msg.message.imageMessage) {
         await procesarMensajeImagen(msg, numero, contacto, fecha);
-        return;
+        continue;
       }
 
       // Manejar mensajes de video
       if (msg.message.videoMessage) {
         await procesarMensajeVideo(msg, numero, contacto, fecha);
-        return;
+        continue;
       }
 
       // Manejar mensajes de documento
       if (msg.message.documentMessage) {
         await procesarMensajeDocumento(msg, numero, contacto, fecha);
-        return;
+        continue;
       }
 
       // Manejar mensajes de texto
       await procesarMensajeTexto(msg, numero, contacto, fecha);
+      }
 
     } catch (error) {
       console.error("Error procesando mensaje:", error);
