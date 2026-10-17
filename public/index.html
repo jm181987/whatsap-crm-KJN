@@ -842,6 +842,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-send-chevron{position:absolute;right:11px;pointer-events:none;color:#23584d;font-size:18px}
 #btnMasivoGlobal[hidden],#btnMasivoEstado[hidden],#btnEnviarLista[hidden]{display:none!important}
 @media(max-width:700px){header{gap:10px;padding:10px 12px}header>div{width:100%;gap:7px}#search{flex:1;min-width:120px;width:auto}.wa-send-menu{flex:1;justify-content:space-between}.wa-send-select-wrap{flex:1;min-width:125px}}
+
+#wa-mic-indicator:not([hidden]){display:flex;align-items:center;gap:7px;padding:6px 9px;border-radius:10px;background:#302124;border:1px solid #b44b52;color:#fff;font-size:12px;max-width:100%;flex-wrap:wrap}
+.wa-mic-dot{width:9px;height:9px;border-radius:50%;background:#ff5656;animation:wa-mic-pulse 1.2s infinite}
+@keyframes wa-mic-pulse{50%{opacity:.3}}
+.wa-mic-meter{height:9px;width:85px;max-width:20vw;background:#4a454a;border-radius:10px;overflow:hidden}
+#wa-mic-level{height:100%;width:0%;background:linear-gradient(90deg,#42d48d,#d2e751,#ff655e);transition:width 90ms}
+#wa-mic-time{font-variant-numeric:tabular-nums}
+@media(max-width:600px){#wa-mic-indicator:not([hidden]){width:100%;justify-content:center}}
   </style>
 </head>
 <body>
@@ -959,7 +967,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <div id="enviar-area">
       <input id="texto" placeholder="Escribe un mensaje...">
       <button id="enviar">Enviar</button>
-      <button id="grabarAudio">🎤</button>
+      <button id="grabarAudio" title="Grabar nota de voz">🎤</button><div id="wa-mic-indicator" hidden role="status" aria-live="polite"><span class="wa-mic-dot"></span><span id="wa-mic-status">Grabando</span><div class="wa-mic-meter"><div id="wa-mic-level"></div></div><span id="wa-mic-time">0:00</span></div>
     </div>
 
     <div class="respuestas">
@@ -2630,12 +2638,58 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 
     // Grabación de voz con permisos, formatos compatibles y liberación del micrófono.
     let recordingStream = null;
+    let micContext = null, micAnalyser = null, micFrame = null, micStarted = 0;
+    const micIndicator = document.getElementById("wa-mic-indicator");
+    const micLevel = document.getElementById("wa-mic-level");
+    const micTime = document.getElementById("wa-mic-time");
+    const micStatus = document.getElementById("wa-mic-status");
+    function stopMicIndicator() {
+      if (micFrame !== null) cancelAnimationFrame(micFrame);
+      micFrame = null;
+      micAnalyser = null;
+      if (micContext) { micContext.close().catch(()=>{}); micContext = null; }
+      micLevel.style.width = "0%";
+      micIndicator.hidden = true;
+    }
+    function startMicIndicator(stream) {
+      stopMicIndicator();
+      micIndicator.hidden = false;
+      micStarted = Date.now();
+      micStatus.textContent = "Grabando";
+      micTime.textContent = "0:00";
+      try {
+        micContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = micContext.createMediaStreamSource(stream);
+        micAnalyser = micContext.createAnalyser();
+        micAnalyser.fftSize = 1024;
+        source.connect(micAnalyser);
+        const samples = new Uint8Array(micAnalyser.fftSize);
+        function tick() {
+          if (!micAnalyser) return;
+          micAnalyser.getByteTimeDomainData(samples);
+          let sum = 0;
+          for (const sample of samples) { const n=(sample-128)/128; sum+=n*n; }
+          const rms=Math.sqrt(sum/samples.length);
+          const percent=Math.min(100,Math.round(rms*350));
+          micLevel.style.width = percent+"%";
+          micStatus.textContent = percent<2 ? "Grabando · señal baja" : "Grabando · micrófono activo";
+          const seconds=Math.floor((Date.now()-micStarted)/1000);
+          micTime.textContent=Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0");
+          micFrame=requestAnimationFrame(tick);
+        }
+        tick();
+      } catch (err) {
+        console.warn("No se pudo visualizar el nivel del micrófono:",err);
+        micStatus.textContent = "Grabando";
+      }
+    }
     const recordButton = document.getElementById("grabarAudio");
     recordButton.type = "button";
     recordButton.onclick = async () => {
       if (!clienteActual) return alert("Seleccioná un contacto antes de grabar");
       if (mediaRecorder?.state === "recording") {
         recordButton.disabled = true; recordButton.textContent = "⏳";
+        stopMicIndicator();
         mediaRecorder.stop(); return;
       }
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
@@ -2648,8 +2702,9 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         audioChunks = [];
         const numeroGrabacion = clienteActual.numero;
         mediaRecorder.ondataavailable = e => {if(e.data?.size)audioChunks.push(e.data)};
-        mediaRecorder.onerror = e => console.error("Error del grabador:",e.error||e);
+        mediaRecorder.onerror = e => { stopMicIndicator(); console.error("Error del grabador:",e.error||e); };
         mediaRecorder.onstop = async () => {
+          stopMicIndicator();
           recordingStream?.getTracks().forEach(track=>track.stop());recordingStream=null;
           const type=mediaRecorder.mimeType||mime||"audio/webm";
           const ext=type.includes("ogg")?"ogg":type.includes("mp4")?"m4a":"webm";
@@ -2661,8 +2716,10 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
           finally{recordButton.disabled=false;recordButton.textContent="🎤";recordButton.style.background="";}
         };
         mediaRecorder.start(250);
+        startMicIndicator(recordingStream);
         recordButton.textContent="⏹️";recordButton.style.background="#d94747";
       } catch(err) {
+        stopMicIndicator();
         recordingStream?.getTracks().forEach(track=>track.stop());recordingStream=null;mediaRecorder=null;
         recordButton.disabled=false;recordButton.textContent="🎤";recordButton.style.background="";
         console.error("Error de micrófono:",err);
