@@ -443,6 +443,12 @@ function configurarManejoMensajes() {
       // Ignorar mensajes propios y estados
       if (msg.key.fromMe || !msg.message || msg.key.remoteJid === "status@broadcast") continue;
 
+      // WhatsApp may wrap incoming media in ephemeral/view-once containers.
+      const wrapped = msg.message.ephemeralMessage?.message
+        || msg.message.viewOnceMessageV2?.message
+        || msg.message.viewOnceMessage?.message
+        || msg.message.documentWithCaptionMessage?.message;
+      if (wrapped) msg.message = wrapped;
       const numero = await resolveConversationJid(msg.key.remoteJid, msg.key.remoteJidAlt);
       const contacto = msg.pushName || "Desconocido";
       const fecha = new Date().toISOString();
