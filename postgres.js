@@ -48,3 +48,18 @@ export const db = {
   all(sql, ...args) { return execute('all', sql, args); },
   async query(sql, params = []) { return (await pool.query(normalize(sql), params)).rows; }
 };
+
+export async function withTransaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await work((sql, params=[]) => client.query(sql, params));
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
