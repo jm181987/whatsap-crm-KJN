@@ -1421,6 +1421,134 @@ app.put("/contactos/:numero", async (req,res)=>{
   }catch(err){console.error("Error editando contacto:",err);res.status(500).json({error:"No se pudo actualizar el contacto"})}
 });
 
+// Agenda del teléfono: vCard y Google People API (OAuth 2.0).
+const googleContactsConfig=()=>({
+  clientId:process.env.GOOGLE_CLIENT_ID,
+  clientSecret:process.env.GOOGLE_CLIENT_SECRET,
+  redirectUri:process.env.GOOGLE_REDIRECT_URI,
+  encryptionKey:process.env.GOOGLE_CONTACTS_ENCRYPTION_KEY
+});
+const googleStates=new Map();
+const googleCrypto=await import("node:crypto");
+function contactPhone(numero) {
+  const phone=String(numero||"").split("@")[0].split(":")[0];
+  return /^\\d{8,15}$/.test(phone) ? phone : null;
+}
+function vcardEscape(value) {
+  return String(value||"").replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/;/g,"\\;").replace(/,/g,"\\,");
+}
+app.get("/contactos/:numero/vcf",async(req,res)=>{
+  const numero=decodeURIComponent(req.params.numero);
+  const phone=contactPhone(numero);
+  if(!phone)return res.status(400).send("Este chat no tiene un teléfono verificable; vinculalo primero.");
+  const rows=await db.query("SELECT nombre FROM clientes WHERE numero=$1",[numero]);
+  if(!rows.length)return res.status(404).send("Contacto inexistente");
+  const nombre=rows[0].nombre||phone;
+  const body=["BEGIN:VCARD","VERSION:3.0","FN:"+vcardEscape(nombre),"TEL;TYPE=CELL:+"+phone,"END:VCARD",""].join("\r\n");
+  res.setHeader("Content-Type","text/vcard; charset=utf-8");
+  res.setHeader("Content-Disposition",'attachment; filename="contacto-'+phone+'.vcf"');
+  res.send(body);
+});
+function googleCipher(text) {
+  const cfg=googleContactsConfig();
+  if(!cfg.encryptionKey||cfg.encryptionKey.length<32)throw Error("Configurá GOOGLE_CONTACTS_ENCRYPTION_KEY (mínimo 32 caracteres)");
+  const key=googleCrypto.createHash("sha256").update(cfg.encryptionKey).digest();
+  const iv=googleCrypto.randomBytes(12);
+  const cipher=googleCrypto.createCipheriv("aes-256-gcm",key,iv);
+  const encrypted=Buffer.concat([cipher.update(text,"utf8"),cipher.final()]);
+  return Buffer.concat([iv,cipher.getAuthTag(),encrypted]).toString("base64");
+}
+function googleDecipher(text) {
+  const cfg=googleContactsConfig();
+  if(!cfg.encryptionKey||cfg.encryptionKey.length<32)throw Error("Falta GOOGLE_CONTACTS_ENCRYPTION_KEY");
+  const data=Buffer.from(text,"base64");
+  const decipher=googleCrypto.createDecipheriv("aes-256-gcm",googleCrypto.createHash("sha256").update(cfg.encryptionKey).digest(),data.subarray(0,12));
+  decipher.setAuthTag(data.subarray(12,28));
+  return Buffer.concat([decipher.update(data.subarray(28)),decipher.final()]).toString("utf8");
+}
+async function ensureGoogleStore(){
+  await db.query("CREATE TABLE IF NOT EXISTS google_contacts_oauth (id INTEGER PRIMARY KEY, refresh_token TEXT NOT NULL)");
+}
+app.get("/google-contacts/status",async(req,res)=>{
+  try{
+    await ensureGoogleStore();
+    const rows=await db.query("SELECT id FROM google_contacts_oauth WHERE id=1");
+    res.json({connected:rows.length>0,configured:!!(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET&&process.env.GOOGLE_REDIRECT_URI&&process.env.GOOGLE_CONTACTS_ENCRYPTION_KEY)});
+  }catch(e){res.status(500).json({error:e.message})}
+});
+app.get("/google-contacts/connect",async(req,res)=>{
+  const cfg=googleContactsConfig();
+  if(!cfg.clientId||!cfg.clientSecret||!cfg.redirectUri||!cfg.encryptionKey)return res.status(503).send("Configurá las variables GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI y GOOGLE_CONTACTS_ENCRYPTION_KEY en Coolify.");
+  const state=googleCrypto.randomBytes(24).toString("hex");
+  googleStates.set(state,Date.now()+600000);
+  for(const [k,v] of googleStates)if(v<Date.now())googleStates.delete(k);
+  const q=new URLSearchParams({client_id:cfg.clientId,redirect_uri:cfg.redirectUri,response_type:"code",scope:"https://www.googleapis.com/auth/contacts",access_type:"offline",prompt:"consent",state});
+  res.redirect("https://accounts.google.com/o/oauth2/v2/auth?"+q);
+});
+app.get("/google-contacts/callback",async(req,res)=>{
+  const state=String(req.query.state||"");
+  const expires=googleStates.get(state);
+  googleStates.delete(state);
+  if(!expires||expires<Date.now())return res.status(400).send("Autorización expirada. Volvé a conectar Google Contacts.");
+  if(!req.query.code)return res.status(400).send("Google no autorizó la conexión.");
+  try{
+    const cfg=googleContactsConfig();
+    const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code:String(req.query.code),client_id:cfg.clientId,client_secret:cfg.clientSecret,redirect_uri:cfg.redirectUri,grant_type:"authorization_code"})});
+    const tokens=await response.json();
+    if(!response.ok||!tokens.refresh_token)throw Error("Google no devolvió un token de actualización. Revocá el acceso previo y reintentá.");
+    await ensureGoogleStore();
+    await db.query("INSERT INTO google_contacts_oauth(id,refresh_token) VALUES(1,$1) ON CONFLICT(id) DO UPDATE SET refresh_token=EXCLUDED.refresh_token",[googleCipher(tokens.refresh_token)]);
+    res.type("html").send('<!doctype html><meta charset="utf-8"><title>Google Contacts</title><p>Google Contacts conectado correctamente. Podés cerrar esta ventana y volver al CRM.</p>');
+  }catch(e){console.error("OAuth Google Contacts:",e);res.status(502).send("No se pudo conectar Google Contacts: "+e.message)}
+});
+async function googleAccessToken(){
+  await ensureGoogleStore();
+  const rows=await db.query("SELECT refresh_token FROM google_contacts_oauth WHERE id=1");
+  if(!rows.length)throw Object.assign(new Error("Conectá Google Contacts primero"),{status:409});
+  const cfg=googleContactsConfig();
+  const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({refresh_token:googleDecipher(rows[0].refresh_token),client_id:cfg.clientId,client_secret:cfg.clientSecret,grant_type:"refresh_token"})});
+  const data=await response.json();
+  if(!response.ok||!data.access_token)throw Error("No se pudo renovar el acceso a Google Contacts");
+  return data.access_token;
+}
+app.post("/google-contacts/sync/:numero",async(req,res)=>{
+  const numero=decodeURIComponent(req.params.numero);
+  const phone=contactPhone(numero);
+  if(!phone)return res.status(400).json({error:"El contacto no tiene teléfono. Vinculá el chat LID primero."});
+  try{
+    const rows=await db.query("SELECT nombre FROM clientes WHERE numero=$1",[numero]);
+    if(!rows.length)return res.status(404).json({error:"Contacto no encontrado"});
+    const nombre=String(rows[0].nombre||"").trim();
+    if(!nombre||nombre===numero||nombre===phone)return res.status(400).json({error:"Primero asignale un nombre al contacto"});
+    const token=await googleAccessToken();
+    const headers={Authorization:"Bearer "+token,"Content-Type":"application/json"};
+    const search=await fetch("https://people.googleapis.com/v1/people:searchContacts?"+new URLSearchParams({query:phone,readMask:"names,phoneNumbers",pageSize:"30"}),{headers:{Authorization:headers.Authorization}});
+    if(!search.ok)throw Error("Google no permitió buscar contactos ("+search.status+")");
+    const results=(await search.json()).results||[];
+    const match=results.find(x=>(x.person?.phoneNumbers||[]).some(n=>String(n.canonicalForm||n.value||"").replace(/\D/g,"")===phone));
+    const person={names:[{givenName:nombre}],phoneNumbers:[{value:"+"+phone,type:"mobile"}]};
+    let response,action;
+    if(match?.person?.resourceName){
+      const resource=match.person.resourceName;
+      const detail=await fetch("https://people.googleapis.com/v1/"+resource+"?personFields=names,phoneNumbers,metadata",{headers:{Authorization:headers.Authorization}});
+      if(!detail.ok)throw Error("No se pudo leer el contacto existente");
+      const current=await detail.json();
+      person.etag=current.etag;
+      response=await fetch("https://people.googleapis.com/v1/"+resource+":updateContact?updatePersonFields=names,phoneNumbers",{method:"PATCH",headers,body:JSON.stringify(person)});
+      action="updated";
+    }else{
+      response=await fetch("https://people.googleapis.com/v1/people:createContact",{method:"POST",headers,body:JSON.stringify(person)});
+      action="created";
+    }
+    if(!response.ok){const body=await response.text();throw Error("Google Contacts ("+response.status+"): "+body.slice(0,300))}
+    res.json({ok:true,action});
+  }catch(e){console.error("Google Contacts sync:",e);res.status(e.status||502).json({error:e.message})}
+});
+app.post("/google-contacts/disconnect",async(req,res)=>{
+  try{await ensureGoogleStore();await db.query("DELETE FROM google_contacts_oauth WHERE id=1");res.json({ok:true})}
+  catch(e){res.status(500).json({error:"No se pudo desconectar"})}
+});
+
 // Vincular manualmente un identificador LID con un contacto existente.
 app.post("/contactos/vincular", async (req,res)=>{
   const lid=String(req.body?.lid||"").trim();
