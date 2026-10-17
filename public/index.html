@@ -2646,7 +2646,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
         }
       } catch(err) {
         console.error('Informe:',err);
-        if (!silent) document.getElementById('wa-report-content').textContent='No se pudo cargar el informe. Revisá el servidor.';
+        if (!silent) document.getElementById('wa-report-content').textContent='No se pudo cargar el informe: ' + err.message;
       }
     }
     setInterval(() => waRefreshReport(true), 60000);
@@ -2675,7 +2675,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       waDashboard.classList.add('open');
       try {
         const response = await fetch('/api/informes/conversaciones?dias=7');
-        if (!response.ok) throw new Error('HTTP '+response.status);
+        if (!response.ok) { const failure = await response.json().catch(()=>({})); throw new Error((failure.code || 'HTTP '+response.status) + ': ' + (failure.detail || failure.error || 'Error del servidor')); }
         const data = await response.json();
         const rows = data.daily || [], pending = data.pending || [];
         const sum = key => rows.reduce((n,row)=>n+Number(row[key]||0),0);
@@ -2690,7 +2690,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
           pending.slice(0,8).map(x=>'<div class="wa-pending-row">'+waEscape(x.nombre)+'<small>'+Math.floor(Math.max(0,Number(x.espera_segundos||0))/60)+' min esperando respuesta</small></div>').join('') :
           '<p style="color:var(--wa-muted)">No hay conversaciones pendientes.</p>';
       } catch(error) {
-        document.getElementById('wa-dash-pending').textContent = 'No se pudieron cargar los datos. Revisá la conexión.';
+        document.getElementById('wa-dash-pending').textContent = 'No se pudo cargar el informe: ' + error.message; console.error('Dashboard KNJ:', error);
       }
     };
     document.querySelectorAll('#wa-filterbar button').forEach(button => {
