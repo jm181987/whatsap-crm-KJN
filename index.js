@@ -421,7 +421,7 @@ function configurarManejoMensajes() {
       // Ignorar mensajes propios y estados
       if (msg.key.fromMe || !msg.message) return;
 
-      const numero = msg.key.remoteJid;
+      const numero = await resolveConversationJid(msg.key.remoteJid, msg.key.remoteJidAlt);
       const contacto = msg.pushName || "Desconocido";
       const fecha = new Date().toISOString();
 
@@ -510,7 +510,7 @@ async function procesarMensajeImagen(msg, numero, contacto, fecha) {
     }
 
     // Guardar archivo
-    const extension = imageMessage.mimetype.split('/')[1] || 'jpg';
+    const extension = (imageMessage.mimetype || 'image/jpeg').split('/')[1] || 'jpg';
     const fileName = `imagen_${Date.now()}.${extension}`;
     const filePath = `public/imagenes/${fileName}`;
     fs.writeFileSync(filePath, buffer);
@@ -543,7 +543,7 @@ async function procesarMensajeVideo(msg, numero, contacto, fecha) {
     }
 
     // Guardar archivo
-    const extension = videoMessage.mimetype.split('/')[1] || 'mp4';
+    const extension = (videoMessage.mimetype || 'video/mp4').split('/')[1] || 'mp4';
     const fileName = `video_${Date.now()}.${extension}`;
     const filePath = `public/videos/${fileName}`;
     fs.writeFileSync(filePath, buffer);
