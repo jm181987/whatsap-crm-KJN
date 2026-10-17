@@ -1408,8 +1408,8 @@ app.get("/api/informes/conversaciones", async (req, res) => {
     const daily = await db.query(`
       SELECT LEFT(fecha, 10) AS dia, COUNT(*) AS mensajes,
              COUNT(DISTINCT numero) AS conversaciones,
-             COUNT(*) FILTER (WHERE tipo = 'recibido') AS recibidos,
-             COUNT(*) FILTER (WHERE tipo = 'enviado') AS enviados
+             SUM(CASE WHEN tipo = 'recibido' THEN 1 ELSE 0 END)::int AS recibidos,
+             SUM(CASE WHEN tipo = 'enviado' THEN 1 ELSE 0 END)::int AS enviados
       FROM mensajes
       WHERE LEFT(fecha, 10) >= TO_CHAR(CURRENT_DATE - ($1::int - 1), 'YYYY-MM-DD')
       GROUP BY LEFT(fecha, 10) ORDER BY dia DESC`, [days]);
@@ -1417,7 +1417,7 @@ app.get("/api/informes/conversaciones", async (req, res) => {
     const pending = await db.query(`
       SELECT m.numero, COALESCE(NULLIF(c.nombre, ''), m.numero) AS nombre,
              m.fecha AS ultima_fecha, m.mensaje AS ultimo_mensaje,
-             CASE WHEN m.fecha ~ '^\\d{4}-\\d{2}-\\d{2}T'
+             CASE WHEN m.fecha ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
                THEN GREATEST(0, EXTRACT(EPOCH FROM (NOW() - NULLIF(m.fecha, '')::timestamptz))::int)
                ELSE NULL END AS espera_segundos
       FROM mensajes m
@@ -1431,7 +1431,7 @@ app.get("/api/informes/conversaciones", async (req, res) => {
       motivo: 'La integración actual no registra duración de llamadas.' } });
   } catch (error) {
     console.error('Error informe conversaciones:', error);
-    res.status(500).json({ error: 'No se pudo generar el informe', detail: process.env.NODE_ENV === 'production' ? undefined : error.message });
+    res.status(500).json({ error: 'No se pudo generar el informe', code: error.code || 'report_query_failed', detail: error.message });
   }
 });
 
