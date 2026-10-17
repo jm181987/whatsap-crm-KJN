@@ -1432,7 +1432,7 @@ const googleStates=new Map();
 const googleCrypto=await import("node:crypto");
 function contactPhone(numero) {
   const phone=String(numero||"").split("@")[0].split(":")[0];
-  return /^\\d{8,15}$/.test(phone) ? phone : null;
+  return /^\d{8,15}$/.test(phone) ? phone : null;
 }
 function vcardEscape(value) {
   return String(value||"").replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/;/g,"\\;").replace(/,/g,"\\,");
