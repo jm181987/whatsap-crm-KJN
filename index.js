@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import cors from 'cors';
 
@@ -17,6 +18,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { Parser } from "json2csv";
 
+// Config desde variables de entorno (.env) — solo config, sin cambiar lógica
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
+const AUTH_DIR = process.env.AUTH_DIR || "auth";
+const DB_PATH = process.env.DB_PATH || "crm.db";
+const DEFAULT_COUNTRY_CODE = process.env.DEFAULT_COUNTRY_CODE || "598";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -27,14 +34,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Crear directorios necesarios si no existen
-const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', 'session'];
+const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', AUTH_DIR];
 directories.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-const db = new sqlite3.Database("crm.db");
+const db = new sqlite3.Database(DB_PATH);
 
 /* ========================================================
    BASE DE DATOS - ESTRUCTURA COMPLETA
@@ -152,7 +159,7 @@ app.post("/subir-contactos", upload.single('archivo'), async (req, res) => {
           if (num.length >= 10) {
             let numeroFormateado = num;
             if (num.length === 10) {
-              numeroFormateado = '52' + num; // Asumir México
+              numeroFormateado = DEFAULT_COUNTRY_CODE + num; // Código de país desde DEFAULT_COUNTRY_CODE (default 598)
             }
             numerosUnicos.add(numeroFormateado + '@s.whatsapp.net');
           }
@@ -370,7 +377,7 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 ======================================================== */
 async function iniciarWhatsApp() {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState("session");
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
 
     sock = makeWASocket({
@@ -1089,10 +1096,10 @@ app.post("/subir-contactos", upload.single("archivo"), async (req, res) => {
           continue;
         }
         
-        // Si no tiene código de país, asumir México (+52)
+        // Si no tiene código de país, usar DEFAULT_COUNTRY_CODE
         if (numeroFormateado.length === 10) {
-          numeroFormateado = '52' + numeroFormateado;
-          console.log(`🇲🇽 Asumiendo México: ${numeroFormateado}`);
+          numeroFormateado = DEFAULT_COUNTRY_CODE + numeroFormateado;
+          console.log(`🌎 Asumiendo código de país ${DEFAULT_COUNTRY_CODE}: ${numeroFormateado}`);
         }
         
         numeroFormateado += '@s.whatsapp.net';
@@ -2065,8 +2072,8 @@ app.post("/enviar-masivo-variantes", async (req, res) => {
    INICIAR SERVIDOR
 ======================================================== */
 
-server.listen(3000, () => {
-  console.log("🟢 CRM activo en http://localhost:3000");
+server.listen(PORT, () => {
+  console.log(`🟢 CRM activo en http://localhost:${PORT}`);
   console.log("🗄️ Base de datos inicializada");
   console.log("📱 Sistema listo para conectar WhatsApp");
   console.log("⏰ Sistema de recordatorios activo");
