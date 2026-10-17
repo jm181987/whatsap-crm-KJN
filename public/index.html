@@ -1265,7 +1265,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
                   const response=await fetch('/contactos/vincular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lid:c.numero,telefono})});
                   const data=await response.json();
                   if(!response.ok)throw new Error(data.error||'Error de vinculación');
-                  alert('Identificadores vinculados. Los registros históricos permanecen intactos.');
+                  alert(data.already ? 'Este chat ya estaba vinculado.' : 'Contacto unificado. Se conservaron los mensajes, notas y recordatorios.');
                   await cargarClientes();
                 }catch(err){alert(err.message)}
               };
