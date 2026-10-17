@@ -1442,7 +1442,7 @@ app.post("/contactos/vincular", async (req,res)=>{
         ultima_interaccion=CASE WHEN ultima_interaccion IS NULL THEN $3
           WHEN $3::text IS NULL THEN ultima_interaccion
           WHEN ultima_interaccion < $3::text THEN $3::text ELSE ultima_interaccion END,
-        etiqueta=CASE WHEN etiqueta='nuevo' AND $4 IS NOT NULL THEN $4 ELSE etiqueta END
+        etiqueta=CASE WHEN etiqueta='nuevo' AND $4::text IS NOT NULL THEN $4::text ELSE etiqueta END
         WHERE numero=$1`,[numero,source.nota,source.ultima_interaccion,source.etiqueta]);
       await query("UPDATE recordatorios SET numero=$1 WHERE numero=$2",[numero,lid]);
       await query("UPDATE contacto_aliases SET numero=$1 WHERE numero=$2",[numero,lid]);
