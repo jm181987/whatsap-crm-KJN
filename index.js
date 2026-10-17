@@ -13,7 +13,7 @@ import {
 import qrcode from "qrcode";
 import fs from "fs";
 import multer from "multer";
-import { db, initDatabase } from "./postgres.js";
+import { db, initDatabase, withTransaction } from "./postgres.js";
 import http from "http";
 import { timingSafeEqual } from "node:crypto";
 import path from "path";
@@ -1416,12 +1416,35 @@ app.post("/contactos/vincular", async (req,res)=>{
   if(!/^\d+@lid$/.test(lid)||telefono.length<8||telefono.length>15)
     return res.status(400).json({error:"Identificador o teléfono inválido"});
   const numero=telefono+"@s.whatsapp.net";
+  if(lid===numero)return res.status(400).json({error:"El chat ya está vinculado"});
   try{
-    const contacts=await db.query("SELECT numero FROM clientes WHERE numero=$1",[numero]);
-    if(!contacts.length)return res.status(404).json({error:"Agendá primero el teléfono"});
-    await db.query("INSERT INTO contacto_aliases(alias,numero) VALUES($1,$2) ON CONFLICT(alias) DO UPDATE SET numero=EXCLUDED.numero",[lid,numero]);
-    res.json({ok:true,numero});
-  }catch(e){console.error("Error vinculando:",e);res.status(500).json({error:"No se pudo vincular"})}
+    const result=await withTransaction(async query=>{
+      const target=(await query("SELECT * FROM clientes WHERE numero=$1 FOR UPDATE",[numero])).rows[0];
+      const source=(await query("SELECT * FROM clientes WHERE numero=$1 FOR UPDATE",[lid])).rows[0];
+      if(!target)throw Object.assign(new Error("Primero agendá el teléfono"),{status:404});
+      if(!source) {
+        const existing=(await query("SELECT numero FROM contacto_aliases WHERE alias=$1",[lid])).rows[0];
+        if(existing?.numero===numero)return {already:true};
+        throw Object.assign(new Error("El chat LID no existe o ya fue vinculado"),{status:404});
+      }
+      const conflict=(await query("SELECT numero FROM contacto_aliases WHERE alias=$1",[lid])).rows[0];
+      if(conflict && conflict.numero!==numero)throw Object.assign(new Error("Este chat ya está vinculado con otro número"),{status:409});
+      const moved=await query("UPDATE mensajes SET numero=$1 WHERE numero=$2",[numero,lid]);
+      await query(`UPDATE clientes SET
+        nota=CASE WHEN COALESCE(nota,'')='' THEN COALESCE($2,'') ELSE nota END,
+        ultima_interaccion=CASE WHEN ultima_interaccion IS NULL THEN $3
+          WHEN $3 IS NULL THEN ultima_interaccion
+          WHEN ultima_interaccion < $3 THEN $3 ELSE ultima_interaccion END,
+        etiqueta=CASE WHEN etiqueta='nuevo' AND $4 IS NOT NULL THEN $4 ELSE etiqueta END
+        WHERE numero=$1`,[numero,source.nota,source.ultima_interaccion,source.etiqueta]);
+      await query("UPDATE recordatorios SET numero=$1 WHERE numero=$2",[numero,lid]);
+      await query("UPDATE contacto_aliases SET numero=$1 WHERE numero=$2",[numero,lid]);
+      await query("INSERT INTO contacto_aliases(alias,numero) VALUES($1,$2) ON CONFLICT(alias) DO UPDATE SET numero=EXCLUDED.numero",[lid,numero]);
+      await query("DELETE FROM clientes WHERE numero=$1",[lid]);
+      return {moved:moved.rowCount};
+    });
+    res.json({ok:true,numero,...result});
+  }catch(e){console.error("Error vinculando:",e);res.status(e.status||500).json({error:e.status?e.message:"No se pudo completar la vinculación; no se modificaron los datos"})}
 });
 
 // Obtener clientes
