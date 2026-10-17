@@ -790,6 +790,16 @@ body[data-theme="light"] #chat .enviado { background:#d9f4e5!important;color:#17
 @media(max-width:1100px){#wa-contact-panel{position:absolute;right:0;top:0;bottom:0;z-index:30;box-shadow:-10px 0 30px #0004}.wa-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.wa-dash-grid{grid-template-columns:1fr}}
 @media(max-width:760px){#wa-rail{flex-basis:48px;padding:10px 3px}#wa-rail button{width:40px;height:40px}#wa-list-head{flex-basis:300px;width:300px}#wa-dashboard{padding:16px}}
 @media(max-width:560px){#wa-rail{flex-basis:44px}#wa-list-head{flex:1;width:auto}#wa-list-head .kanban{flex:1;width:auto}#chat{inset:0!important}.wa-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.wa-metric{padding:12px}.wa-metric strong{font-size:23px}}
+
+/* Keep legacy action hooks but avoid duplicate navigation controls. */
+body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body > header #verGrafico { display:none!important; }
+#wa-rail button { position:relative; }
+#wa-nav-pending::after { content:attr(data-count); position:absolute;right:-2px;top:-3px;font-size:10px;min-width:14px;padding:2px 3px;border-radius:9px;background:var(--wa-text);color:var(--wa-panel);display:none; }
+#wa-nav-pending.has-pending::after { display:block; }
+#wa-rail button.active { box-shadow:inset 3px 0 0 var(--wa-text); }
+.wa-overlay-backdrop { position:fixed;inset:0;z-index:1040;background:#0006; }
+#wa-contact-panel.open { z-index:1060; }
+#wa-report { z-index:1080; }
   </style>
 </head>
 <body>
@@ -797,11 +807,11 @@ body[data-theme="light"] #chat .enviado { background:#d9f4e5!important;color:#17
     <h1>KNJ · Conversaciones</h1>
     <div>
       <input type="text" id="search" placeholder="Buscar...">
-      <button type="button" id="wa-theme" title="Cambiar tema">◐ Tema</button>
-      <button type="button" id="wa-reports">Informe diario</button>
-      <button type="button" id="wa-pending">Sin responder <span id="wa-pending-count">0</span></button>
+      <button type="button" id="wa-theme" title="Cambiar tema" hidden>◐ Tema</button>
+      <button type="button" id="wa-reports" hidden>Informe diario</button>
+      <button type="button" id="wa-pending" hidden>Sin responder <span id="wa-pending-count">0</span></button>
       <button id="exportar">Exportar CSV</button>
-      <button id="verGrafico">📊 Ver estadísticas</button>
+      <button id="verGrafico" hidden>📊 Ver estadísticas</button>
       <button id="btnMasivoGlobal">📢 Todos</button>
       <button id="btnMasivoEstado">📊 Por Estado</button>
       <!-- Botones se crearán dinámicamente -->
@@ -2702,6 +2712,63 @@ body[data-theme="light"] #chat .enviado { background:#d9f4e5!important;color:#17
     });
     document.getElementById('chat-header').style.cursor = 'pointer';
     document.getElementById('chat-header').title = 'Ver ficha del contacto';
+
+
+    // Dismiss temporary surfaces on outside click, Escape, and navigation.
+    const waDismissIds = ['modalImagen','modalMasivo','modalMasivoEstado','modalSubirContactos','modalEnviarLista','modalRecordatorio','modalNotificacionRecordatorio','qrModal','graficoModal'];
+    function waDismissTemporary(except=null) {
+      const panel = document.getElementById('wa-contact-panel');
+      const dashboard = document.getElementById('wa-dashboard');
+      const report = document.getElementById('wa-report');
+      if (panel && panel!==except) panel.classList.remove('open');
+      if (dashboard && dashboard!==except) dashboard.classList.remove('open');
+      if (report && report!==except) report.hidden=true;
+      waDismissIds.forEach(id => {
+        const el=document.getElementById(id);
+        if (el && el!==except && getComputedStyle(el).display!=='none') el.style.display='none';
+      });
+    }
+    document.addEventListener('pointerdown', event => {
+      const target=event.target;
+      const panel=document.getElementById('wa-contact-panel');
+      const report=document.getElementById('wa-report');
+      const dashboard=document.getElementById('wa-dashboard');
+      const isControl=target.closest('button, input, select, textarea, a, label');
+      if (panel.classList.contains('open') && !panel.contains(target) && !target.closest('#chat-header')) panel.classList.remove('open');
+      if (!report.hidden && !report.contains(target) && !target.closest('#wa-nav-pending,#wa-reports,#wa-pending')) report.hidden=true;
+      if (dashboard.classList.contains('open') && !dashboard.contains(target) && !target.closest('#wa-nav-dash')) dashboard.classList.remove('open');
+      waDismissIds.forEach(id => {
+        const el=document.getElementById(id);
+        if (!el || getComputedStyle(el).display==='none') return;
+        if (target===el) el.style.display='none';
+      });
+    });
+    document.addEventListener('keydown',event => {
+      if (event.key==='Escape') waDismissTemporary();
+    });
+    document.querySelectorAll('#wa-rail button').forEach(button => {
+      button.addEventListener('click', () => {
+        if (button.id==='wa-nav-theme') return;
+        document.querySelectorAll('#wa-rail button').forEach(b=>b.classList.toggle('active',b===button));
+        if (button.id==='wa-nav-chats') waDismissTemporary();
+        if (button.id==='wa-nav-dash') {
+          document.getElementById('wa-report').hidden=true;
+          document.getElementById('wa-contact-panel').classList.remove('open');
+        }
+        if (button.id==='wa-nav-pending') {
+          document.getElementById('wa-dashboard').classList.remove('open');
+          document.getElementById('wa-contact-panel').classList.remove('open');
+        }
+      });
+    });
+    const waPendingBadge=document.getElementById('wa-nav-pending');
+    const waPendingCount=document.getElementById('wa-pending-count');
+    const waPendingObserver=new MutationObserver(() => {
+      const count=Number(waPendingCount.textContent)||0;
+      waPendingBadge.dataset.count=count>99?'99+':String(count);
+      waPendingBadge.classList.toggle('has-pending',count>0);
+    });
+    waPendingObserver.observe(waPendingCount,{childList:true,characterData:true,subtree:true});
 
     // Inicialización completa
     window.addEventListener('load', () => {
