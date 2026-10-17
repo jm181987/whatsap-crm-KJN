@@ -1,0 +1,24 @@
+# Sesiones y credenciales de WhatsApp (Baileys) - NUNCA subir
+ auth/
+ creds.json
+ *.session.*
+
+# Dependencias
+ node_modules/
+
+# Entorno y secretos
+ .env
+ .env.*
+ !.env.example
+
+# Datos locales y uploads
+ *.db
+ *.sqlite
+ *.sqlite3
+ public/archivos/
+ public/audios/
+ public/imagenes/
+
+# Logs y sistema
+ *.log
+ .DS_Store
