@@ -522,6 +522,11 @@ async function procesarMensajeAudio(msg, numero, contacto, fecha) {
 
   } catch (error) {
     console.error("❌ Error procesando audio:", error);
+    try {
+      await guardarMensajeEnDB(numero, "🎵 Audio (archivo no disponible)", 'recibido', fecha, null, 'audio/ogg', 1);
+      actualizarCliente(numero, contacto, fecha);
+      crearNotificacion(numero, contacto, "🎵 Audio (archivo no disponible)", fecha);
+    } catch (dbError) { console.error("Error registrando multimedia sin archivo:", dbError); }
   }
 }
 
@@ -588,6 +593,11 @@ async function procesarMensajeVideo(msg, numero, contacto, fecha) {
 
   } catch (error) {
     console.error("❌ Error procesando video:", error);
+    try {
+      await guardarMensajeEnDB(numero, "🎥 Video (archivo no disponible)", 'recibido', fecha, null, 'video/mp4', 1);
+      actualizarCliente(numero, contacto, fecha);
+      crearNotificacion(numero, contacto, "🎥 Video (archivo no disponible)", fecha);
+    } catch (dbError) { console.error("Error registrando multimedia sin archivo:", dbError); }
   }
 }
 
@@ -639,18 +649,12 @@ async function procesarMensajeTexto(msg, numero, contacto, fecha) {
 }
 
 // Función para guardar mensajes en la base de datos
-function guardarMensajeEnDB(numero, mensaje, tipo, fecha, archivo, mime_type, es_multimedia) {
-  db.run(
-    "INSERT INTO mensajes (numero, mensaje, tipo, fecha, archivo, mime_type, es_multimedia) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [numero, mensaje, tipo, fecha, archivo, mime_type, es_multimedia],
-    function(err) {
-      if (err) {
-        console.error("❌ Error guardando mensaje en DB:", err);
-      } else {
-        console.log("✅ Mensaje guardado en DB:", mensaje.substring(0, 30));
-      }
-    }
+async function guardarMensajeEnDB(numero, mensaje, tipo, fecha, archivo, mime_type, es_multimedia) {
+  await db.query(
+    "INSERT INTO mensajes (numero, mensaje, tipo, fecha, archivo, mime_type, es_multimedia) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    [numero, mensaje, tipo, fecha, archivo, mime_type, es_multimedia]
   );
+  console.log("✅ Mensaje guardado en DB:", String(mensaje).substring(0, 30));
 }
 
 function actualizarCliente(numero, contacto, fecha) {
