@@ -690,6 +690,42 @@
     .wa-report .muted { color:var(--wa-muted); }
     .wa-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .wa-toolbar button { border:1px solid var(--wa-border); background:var(--wa-card); color:var(--wa-text); border-radius:8px; padding:8px 12px; }
+
+    /* Workspace v2: compact conversation rail and a full-size chat workspace. */
+    body { --wa-bg:#101214; --wa-panel:#191c1e; --wa-card:#222628; --wa-border:#303639; --wa-text:#e9edef; --wa-muted:#aebac1; }
+    body[data-theme="light"] { --wa-bg:#e9edef; --wa-panel:#fff; --wa-card:#f5f6f6; --wa-border:#e2e5e7; --wa-text:#182229; --wa-muted:#667781; }
+    body { height:100dvh; overflow:hidden; }
+    body > header { min-height:62px; box-sizing:border-box; flex-shrink:0; padding:10px 20px!important; }
+    body > header > div { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    body > header button { border-radius:8px; padding:8px 10px; font-size:12px; }
+    .kanban { display:flex; flex-direction:column; flex:0 0 340px; width:340px; min-width:0; height:auto; overflow-y:auto; gap:0; padding:0!important; border-right:1px solid var(--wa-border); }
+    .kanban .column { flex:0 0 auto; width:auto; min-width:0; height:auto; max-height:none; overflow:visible; border:0!important; border-bottom:1px solid var(--wa-border)!important; border-radius:0; box-shadow:none; padding:10px!important; }
+    .kanban .column h2 { font-size:12px; text-align:left; padding:6px 8px 9px; margin:0; color:var(--wa-muted); text-transform:uppercase; letter-spacing:.6px; }
+    .kanban .cliente { border:0!important; border-radius:8px; padding:12px!important; margin:3px 0; min-height:38px; }
+    .kanban .cliente:hover { background:var(--wa-card)!important; transform:none; }
+    #chat { position:relative!important; top:auto!important; right:auto!important; width:auto!important; height:auto!important; margin:0!important; border:0!important; flex:1 1 auto; min-width:0; z-index:1; }
+    #chat header { background:var(--wa-panel)!important; color:var(--wa-text)!important; border-bottom:1px solid var(--wa-border); min-height:50px; padding:10px 18px!important; }
+    #chat-header { font-weight:600; }
+    #cerrarChat { background:transparent!important; color:var(--wa-muted)!important; }
+    #mensajes { flex:1 1 auto; min-height:100px; overflow-y:auto; padding:20px max(20px,8%)!important; background:var(--wa-bg); }
+    .nota-box,.recordatorios-box { margin:8px 14px!important; border:1px solid var(--wa-border)!important; border-radius:10px; }
+    .recordatorios-box { border-left:1px solid var(--wa-border)!important; }
+    #wa-workspace { display:flex; flex:1; min-height:0; overflow:hidden; }
+    #wa-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:var(--wa-muted); text-align:center; padding:24px; }
+    #wa-empty svg { opacity:.65; }
+    #wa-empty strong { font-size:22px; font-weight:600; color:var(--wa-text); }
+    .wa-report { position:absolute; z-index:1100; top:65px; left:50%; transform:translateX(-50%); width:min(900px,92vw); max-height:75vh; box-shadow:0 18px 65px #0008; border:1px solid var(--wa-border); border-radius:12px; }
+    @media(max-width:800px) {
+      .kanban { flex-basis:38%; width:38%; }
+      #mensajes { padding:12px!important; }
+      body > header { max-height:130px; overflow:auto; }
+    }
+    @media(max-width:560px) {
+      .kanban { flex-basis:100%; width:100%; }
+      #chat { position:absolute!important; inset:0; z-index:100!important; background:var(--wa-panel)!important; }
+      #wa-workspace { position:relative; }
+      #wa-empty { display:none; }
+    }
   </style>
 </head>
 <body>
@@ -716,7 +752,7 @@
     <p id="wa-call-note" class="muted"></p>
     <div id="wa-report-content"></div>
   </section>
-  <div class="kanban" id="kanban">
+  <main id="wa-workspace"><div class="kanban" id="kanban">
     <div class="column" data-etiqueta="nuevo" style="border-top:4px solid #00bcd4;"><h2>Nuevo</h2></div>
     <div class="column" data-etiqueta="callback" style="border-top:4px solid #f3e921;"><h2>Callback</h2></div>
     <div class="column" data-etiqueta="analista" style="border-top:4px solid #4caf50;"><h2>Quiere Analista</h2></div>
@@ -725,6 +761,10 @@
     <div class="column" data-etiqueta="archivado" style="border-top:4px solid #d6d6d6;"><h2>Archivado</h2></div>
   </div>
 
+  <div id="wa-empty" aria-label="Seleccioná una conversación">
+    <svg width="74" height="74" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    <strong>KNJ Conversaciones</strong><span>Elegí un contacto para ver los mensajes y responder desde el CRM.</span>
+  </div>
   <div id="chat">
     <header><span id="chat-header"></span><button id="cerrarChat">❌</button></header>
 
@@ -2506,6 +2546,13 @@
       if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
     });
 
+    // Keep the empty state synchronized with the active chat.
+    const waEmpty = document.getElementById('wa-empty');
+    const waChat = document.getElementById('chat');
+    const waObserver = new MutationObserver(() => {
+      waEmpty.style.display = getComputedStyle(waChat).display === 'none' ? '' : 'none';
+    });
+    waObserver.observe(waChat, { attributes:true, attributeFilter:['style'] });
     // Inicialización completa
     window.addEventListener('load', () => {
       cargarClientes();
