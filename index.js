@@ -1399,6 +1399,42 @@ app.put("/clientes/:numero/nombre", (req, res) => {
   );
 });
 
+
+/* Daily activity and unanswered conversation monitoring. */
+app.get("/api/informes/conversaciones", async (req, res) => {
+  try {
+    const days = Math.min(90, Math.max(1, Number.parseInt(req.query.dias, 10) || 14));
+    const daily = await db.query(`
+      SELECT LEFT(fecha, 10) AS dia,
+             COUNT(*)::int AS mensajes,
+             COUNT(DISTINCT numero)::int AS conversaciones,
+             COUNT(*) FILTER (WHERE tipo = 'recibido')::int AS recibidos,
+             COUNT(*) FILTER (WHERE tipo = 'enviado')::int AS enviados
+      FROM mensajes
+      WHERE fecha >= TO_CHAR(CURRENT_DATE - ($1::int - 1), 'YYYY-MM-DD')
+      GROUP BY LEFT(fecha, 10) ORDER BY dia DESC`, [days]);
+    const pending = await db.query(`
+      SELECT DISTINCT ON (m.numero) m.numero, COALESCE(c.nombre, m.numero) AS nombre,
+             m.fecha AS ultima_fecha, m.mensaje AS ultimo_mensaje,
+             EXTRACT(EPOCH FROM (NOW() - m.fecha::timestamptz))::int AS espera_segundos
+      FROM mensajes m LEFT JOIN clientes c ON c.numero = m.numero
+      WHERE m.tipo = 'recibido'
+        AND NOT EXISTS (
+          SELECT 1 FROM mensajes respuesta
+          WHERE respuesta.numero = m.numero AND respuesta.tipo = 'enviado'
+            AND (respuesta.fecha > m.fecha OR (respuesta.fecha = m.fecha AND respuesta.id > m.id))
+        )
+        AND m.id = (SELECT ultimo.id FROM mensajes ultimo WHERE ultimo.numero = m.numero ORDER BY ultimo.fecha DESC, ultimo.id DESC LIMIT 1)
+      ORDER BY m.numero, m.fecha DESC LIMIT 200`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ daily, pending, llamadas: { duracion_segundos: null, disponible: false,
+      motivo: 'WhatsApp/Baileys no proporciona la duración de llamadas en este CRM.' } });
+  } catch (error) {
+    console.error('Error informe conversaciones:', error);
+    res.status(500).json({ error: 'No se pudo generar el informe' });
+  }
+});
+
 // Obtener TODOS los mensajes (para analytics)
 app.get("/mensajes", (req, res) => {
   console.log("📊 Solicitando todos los mensajes para analytics");
