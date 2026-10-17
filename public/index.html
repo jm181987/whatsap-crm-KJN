@@ -645,7 +645,7 @@
     }
 
     /* Inputs de archivo ocultos */
-    #inputAudio, #inputImagen, #inputDocumento {
+    #inputAudio, #inputImagen, #inputDocumento, #inputVideo {
       display: none;
     }
 
@@ -902,6 +902,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       <button class="boton-multimedia" onclick="document.getElementById('inputAudio').click()">
         🎵 Audio
       </button>
+      <button class="boton-multimedia" type="button" onclick="document.getElementById('inputVideo').click()">🎥 Video</button>
       <button class="boton-multimedia" onclick="document.getElementById('inputDocumento').click()">
         📄 Archivo
       </button>
@@ -944,6 +945,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
   </main>
 
   <!-- Inputs de archivo ocultos -->
+  <input type="file" id="inputVideo" accept="video/*" onchange="enviarVideo(this.files[0]); this.value=''">
   <input type="file" id="inputAudio" accept="audio/*" onchange="enviarAudio(this.files[0])">
   <input type="file" id="inputImagen" accept="image/*" onchange="enviarImagen(this.files[0])">
   <input type="file" id="inputDocumento" onchange="enviarDocumento(this.files[0])">
