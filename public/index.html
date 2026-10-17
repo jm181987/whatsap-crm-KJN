@@ -819,6 +819,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
 #chat .msg-video video{display:block;width:100%;max-width:100%;max-height:320px;object-fit:contain;background:#101010;border-radius:10px}
 #chat .msg:has(.msg-audio),#chat .msg:has(.msg-video){max-width:min(88%,420px);min-width:0;overflow-wrap:anywhere}
 @media(max-width:600px){#chat .msg:has(.msg-audio),#chat .msg:has(.msg-video){max-width:96%}}
+#wa-upload-progress{margin:6px 14px;padding:10px 12px;border:1px solid var(--wa-border);border-radius:10px;background:var(--wa-panel);font-size:12px}#wa-upload-progress[hidden]{display:none!important}.wa-upload-head{display:flex;justify-content:space-between;margin-bottom:7px}#wa-upload-bar{width:100%;height:10px;accent-color:#27b47b}
   </style>
 </head>
 <body>
@@ -908,6 +909,7 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       </button>
     </div>
 
+    <div id="wa-upload-progress" role="status" aria-live="polite" hidden><div class="wa-upload-head"><span id="wa-upload-label">Subiendo...</span><strong id="wa-upload-percent">0%</strong></div><progress id="wa-upload-bar" max="100" value="0"></progress></div>
     <div id="enviar-area">
       <input id="texto" placeholder="Escribe un mensaje...">
       <button id="enviar">Enviar</button>
@@ -2456,6 +2458,24 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
     }
 
     // Enviar imagen
+    function enviarConProgreso(url,data,tipo){
+      return new Promise((resolve,reject)=>{
+        const xhr=new XMLHttpRequest(),panel=document.getElementById('wa-upload-progress'),label=document.getElementById('wa-upload-label'),percent=document.getElementById('wa-upload-percent'),bar=document.getElementById('wa-upload-bar');
+        panel.hidden=false;bar.value=0;percent.textContent='0%';label.textContent='Subiendo '+tipo+'...';
+        xhr.upload.onprogress=e=>{if(!e.lengthComputable)return;const n=Math.min(100,Math.round(e.loaded/e.total*100));bar.value=n;percent.textContent=n+'%';if(n===100)label.textContent='Archivo subido. Enviando por WhatsApp...';};
+        xhr.onload=()=>{let result;try{result=JSON.parse(xhr.responseText)}catch{result={error:'Respuesta inválida'}}if(xhr.status>=200&&xhr.status<300){label.textContent='Envío completado';bar.value=100;percent.textContent='100%';setTimeout(()=>panel.hidden=true,1800);resolve(result)}else{label.textContent='Error al enviar';reject(new Error(result.error||'HTTP '+xhr.status))}};
+        xhr.onerror=()=>{label.textContent='Error de conexión';reject(new Error('Error de conexión'))};
+        xhr.open('POST',url);xhr.send(data);
+      });
+    }
+    async function enviarVideo(file){
+      if(!clienteActual)return alert('Seleccioná un contacto primero');
+      if(!file)return;
+      const data=new FormData();data.append('video',file);data.append('numero',clienteActual.numero);
+      try{await enviarConProgreso('/enviar-video',data,'video');await cargarMensajes(clienteActual.numero)}
+      catch(err){console.error(err);alert('Error enviando video: '+err.message)}
+    }
+
     async function enviarImagen(file) {
       if (!clienteActual) {
         alert("Selecciona un contacto primero");
@@ -2472,23 +2492,9 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       formData.append("caption", caption);
 
       try {
-        const response = await fetch("/enviar-imagen", {
-          method: "POST",
-          body: formData
-        });
-
-        const result = await response.json();
-        
-        if (response.ok) {
-          cargarMensajes(clienteActual.numero);
-          alert("✅ Imagen enviada correctamente");
-        } else {
-          alert("❌ Error: " + result.error);
-        }
-      } catch (error) {
-        console.error('Error enviando imagen:', error);
-        alert("❌ Error al enviar imagen");
-      }
+        await enviarConProgreso('/enviar-imagen',formData,'imagen');
+        await cargarMensajes(clienteActual.numero);
+      } catch(error){console.error(error);alert('Error enviando imagen: '+error.message)}
     }
 
     // Enviar documento
