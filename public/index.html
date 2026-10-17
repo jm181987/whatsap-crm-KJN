@@ -2554,82 +2554,45 @@ body > header #wa-theme,body > header #wa-reports,body > header #wa-pending,body
       }
     }
 
-    // GRABACIÓN DE AUDIO MEJORADA
-    document.getElementById("grabarAudio").onclick = async () => {
-      if (!clienteActual) {
-        alert("Selecciona un contacto primero");
-        return;
+    // Grabación de voz con permisos, formatos compatibles y liberación del micrófono.
+    let recordingStream = null;
+    const recordButton = document.getElementById("grabarAudio");
+    recordButton.type = "button";
+    recordButton.onclick = async () => {
+      if (!clienteActual) return alert("Seleccioná un contacto antes de grabar");
+      if (mediaRecorder?.state === "recording") {
+        recordButton.disabled = true; recordButton.textContent = "⏳";
+        mediaRecorder.stop(); return;
       }
-
-      if (!mediaRecorder) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-              channelCount: 1,
-              sampleRate: 44100
-            } 
-          });
-          
-          mediaRecorder = new MediaRecorder(stream);
-
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-              audioChunks.push(e.data);
-            }
-          };
-
-          mediaRecorder.onstop = async () => {
-            const blob = new Blob(audioChunks, { 
-              type: 'audio/webm'
-            });
-            audioChunks = [];
-
-            const formData = new FormData();
-            formData.append("audio", blob, `audio_${Date.now()}.webm`);
-            formData.append("numero", clienteActual.numero);
-
-            try {
-              document.getElementById("grabarAudio").textContent = "⏳";
-              document.getElementById("grabarAudio").disabled = true;
-              
-              const response = await fetch("/enviar-audio", {
-                method: "POST",
-                body: formData
-              });
-
-              const result = await response.json();
-              
-              if (response.ok) {
-                cargarMensajes(clienteActual.numero);
-                alert("✅ Audio enviado correctamente");
-              } else {
-                alert("❌ Error: " + result.error);
-              }
-              
-            } catch (error) {
-              console.error('Error enviando audio:', error);
-              alert("❌ Error al enviar audio");
-            } finally {
-              document.getElementById("grabarAudio").textContent = "🎤";
-              document.getElementById("grabarAudio").disabled = false;
-              document.getElementById("grabarAudio").style.background = "#00ffc6";
-            }
-          };
-        } catch (error) {
-          console.error('Error accediendo al micrófono:', error);
-          alert("No se pudo acceder al micrófono");
-          return;
-        }
-      }
-
-      if (mediaRecorder.state === "inactive") {
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
+        return alert("La grabación requiere HTTPS y permiso para usar el micrófono.");
+      if (!window.MediaRecorder) return alert("El navegador no permite grabar audio.");
+      try {
+        recordingStream = await navigator.mediaDevices.getUserMedia({audio:true});
+        const mime = ["audio/webm;codecs=opus","audio/ogg;codecs=opus","audio/mp4","audio/webm"].find(x=>MediaRecorder.isTypeSupported(x));
+        mediaRecorder = mime ? new MediaRecorder(recordingStream,{mimeType:mime}) : new MediaRecorder(recordingStream);
         audioChunks = [];
-        mediaRecorder.start();
-        document.getElementById("grabarAudio").textContent = "⏹️";
-        document.getElementById("grabarAudio").style.background = "#ff5555";
-        alert("🎤 Grabando... Haz clic nuevamente para enviar");
-      } else {
-        mediaRecorder.stop();
+        const numeroGrabacion = clienteActual.numero;
+        mediaRecorder.ondataavailable = e => {if(e.data?.size)audioChunks.push(e.data)};
+        mediaRecorder.onerror = e => console.error("Error del grabador:",e.error||e);
+        mediaRecorder.onstop = async () => {
+          recordingStream?.getTracks().forEach(track=>track.stop());recordingStream=null;
+          const type=mediaRecorder.mimeType||mime||"audio/webm";
+          const ext=type.includes("ogg")?"ogg":type.includes("mp4")?"m4a":"webm";
+          const blob=new Blob(audioChunks,{type});audioChunks=[];mediaRecorder=null;
+          if(!blob.size){recordButton.disabled=false;recordButton.textContent="🎤";return alert("No se capturó audio.");}
+          const data=new FormData();data.append("audio",blob,"nota_voz_"+Date.now()+"."+ext);data.append("numero",numeroGrabacion);
+          try {await enviarConProgreso("/enviar-audio",data,"audio");if(clienteActual?.numero===numeroGrabacion)await cargarMensajes(numeroGrabacion)}
+          catch(err){console.error(err);alert("Error enviando grabación: "+err.message)}
+          finally{recordButton.disabled=false;recordButton.textContent="🎤";recordButton.style.background="";}
+        };
+        mediaRecorder.start(250);
+        recordButton.textContent="⏹️";recordButton.style.background="#d94747";
+      } catch(err) {
+        recordingStream?.getTracks().forEach(track=>track.stop());recordingStream=null;mediaRecorder=null;
+        recordButton.disabled=false;recordButton.textContent="🎤";recordButton.style.background="";
+        console.error("Error de micrófono:",err);
+        alert(err.name==="NotAllowedError"?"Permiso de micrófono denegado. Habilitalo en el navegador.":"No se pudo grabar: "+err.message);
       }
     };
 
