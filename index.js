@@ -431,6 +431,33 @@ async function resolveConversationJid(jid, alternativeJid) {
     const match = existing.find(row => phones.includes(phoneKey(row.numero)));
     if (match) return match.numero;
   }
+  // Persist a verified LID-to-phone association from WhatsApp metadata.
+  const lid=candidates.find(x=>String(x).endsWith("@lid"));
+  const phone=candidates.find(x=>phoneKey(x));
+  if(lid && phone) {
+    const normalized=phoneKey(phone)+"@s.whatsapp.net";
+    try {
+      await db.query("INSERT INTO contacto_aliases (alias,numero) VALUES ($1,$2) ON CONFLICT(alias) DO UPDATE SET numero=EXCLUDED.numero",[lid,normalized]);
+      const previous=await db.query("SELECT numero FROM clientes WHERE numero=$1",[lid]);
+      if(previous.length) {
+        const existing=await db.query("SELECT numero FROM clientes WHERE numero=$1",[normalized]);
+        if(existing.length) {
+          await db.query("UPDATE mensajes SET numero=$1 WHERE numero=$2",[normalized,lid]);
+          await db.query("DELETE FROM clientes WHERE numero=$1",[lid]);
+        } else {
+          await db.query("UPDATE clientes SET numero=$1 WHERE numero=$2",[normalized,lid]);
+          await db.query("UPDATE mensajes SET numero=$1 WHERE numero=$2",[normalized,lid]);
+        }
+      }
+    }catch(err){console.error("No se pudo asociar LID:",err)}
+    return normalized;
+  }
+  if(lid) {
+    try {
+      const aliases=await db.query("SELECT numero FROM contacto_aliases WHERE alias=$1",[lid]);
+      if(aliases.length)return aliases[0].numero;
+    }catch(err){console.error("Error consultando alias:",err)}
+  }
   return alternativeJid && phoneKey(alternativeJid) ? alternativeJid : jid;
 }
 
