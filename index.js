@@ -420,6 +420,10 @@ function phoneKey(jid) {
 }
 
 async function resolveConversationJid(jid, alternativeJid) {
+  if(String(jid||"").endsWith("@lid")){
+    const alias=await db.query("SELECT numero FROM contacto_aliases WHERE alias=$1",[jid]);
+    if(alias.length)return alias[0].numero;
+  }
   const candidates = [jid, alternativeJid].filter(Boolean);
   for (const candidate of candidates) {
     const existing = await db.query('SELECT numero FROM clientes WHERE numero = $1 LIMIT 1', [candidate]);
@@ -1403,6 +1407,21 @@ app.post("/contactos", async (req,res) => {
     if(!result.length)return res.status(409).json({error:"El contacto ya está agendado"});
     res.status(201).json({ok:true,numero,nombre});
   }catch(e){console.error("Error agendando contacto:",e);res.status(500).json({error:"No se pudo guardar el contacto"})}
+});
+
+// Vincular manualmente un identificador LID con un contacto existente.
+app.post("/contactos/vincular", async (req,res)=>{
+  const lid=String(req.body?.lid||"").trim();
+  const telefono=String(req.body?.telefono||"").replace(/\D/g,"");
+  if(!/^\d+@lid$/.test(lid)||telefono.length<8||telefono.length>15)
+    return res.status(400).json({error:"Identificador o teléfono inválido"});
+  const numero=telefono+"@s.whatsapp.net";
+  try{
+    const contacts=await db.query("SELECT numero FROM clientes WHERE numero=$1",[numero]);
+    if(!contacts.length)return res.status(404).json({error:"Agendá primero el teléfono"});
+    await db.query("INSERT INTO contacto_aliases(alias,numero) VALUES($1,$2) ON CONFLICT(alias) DO UPDATE SET numero=EXCLUDED.numero",[lid,numero]);
+    res.json({ok:true,numero});
+  }catch(e){console.error("Error vinculando:",e);res.status(500).json({error:"No se pudo vincular"})}
 });
 
 // Obtener clientes
