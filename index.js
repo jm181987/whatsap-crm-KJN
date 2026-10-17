@@ -20,14 +20,15 @@ import { Parser } from "json2csv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false }));
 const server = http.createServer(app);
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Crear directorios necesarios si no existen
-const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', 'session'];
+const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', process.env.SESSION_DIR || 'session'];
 directories.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -1747,18 +1748,6 @@ app.get("/dashboard/actividad-7dias", (req, res) => {
       res.json(rows);
     }
   });
-});
-
-// Endpoint para obtener mensajes
-app.get('/mensajes', async (req, res) => {
-  try {
-    // Ajusta según tu base de datos
-    const mensajes = await db.query('SELECT * FROM mensajes ORDER BY fecha DESC');
-    res.json(mensajes);
-  } catch (error) {
-    console.error('Error fetching mensajes:', error);
-    res.status(500).json({ error: 'Error al obtener mensajes' });
-  }
 });
 
 /* ========================================================
