@@ -18,13 +18,13 @@ function normalize(sql) {
   return sql
     .replace(/\?/g, () => '$' + (++n))
     .replace(/DATE\('now',\s*'-6 days'\)/gi, "TO_CHAR(CURRENT_DATE - INTERVAL '6 days', 'YYYY-MM-DD')")
-    .replace(/DATE\('now'\)/gi, 'CURRENT_DATE')
+     .replace(/DATE\('now'\)/gi, 'CURRENT_DATE')
     .replace(/datetime\('now',\s*'-1 day'\)/gi, "TO_CHAR(NOW() - INTERVAL '1 day', 'YYYY-MM-DD HH24:MI:SS')")
     .replace(/datetime\((\w+\.\w+)\)/gi, '$1')
     .replace(/\(julianday\(([^)]+)\)\s*-\s*julianday\(([^)]+)\)\)/gi, '(EXTRACT(EPOCH FROM ($1::timestamp - $2::timestamp)) / 86400.0)')
     .replace(/\bDATE\((\w+(?:\.\w+)?)\)/gi, 'DATE($1::timestamp)')
-    .replace(/COUNT\(\*\)/gi, 'COUNT(*)::int')
-    .replace(/COUNT\(DISTINCT (\w+)\)/gi, 'COUNT(DISTINCT $1)::int');
+     .replace(/COUNT\(\*\)/gi, 'COUNT(*)::int')
+     .replace(/COUNT\(DISTINCT (\w+)\)/gi, 'COUNT(DISTINCT $1)::int');
 }
 function execute(kind, sql, args) {
   const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
