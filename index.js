@@ -1409,6 +1409,18 @@ app.post("/contactos", async (req,res) => {
   }catch(e){console.error("Error agendando contacto:",e);res.status(500).json({error:"No se pudo guardar el contacto"})}
 });
 
+// Editar ficha del contacto sin alterar el historial de conversación.
+app.put("/contactos/:numero", async (req,res)=>{
+  const numero=decodeURIComponent(req.params.numero);
+  const nombre=String(req.body?.nombre||"").trim();
+  if(!nombre||nombre.length>100)return res.status(400).json({error:"Ingresá un nombre válido (máximo 100 caracteres)"});
+  try{
+    const rows=await db.query("UPDATE clientes SET nombre=$1 WHERE numero=$2 RETURNING numero,nombre,etiqueta",[nombre,numero]);
+    if(!rows.length)return res.status(404).json({error:"No se encontró el contacto"});
+    res.json({ok:true,contacto:rows[0]});
+  }catch(err){console.error("Error editando contacto:",err);res.status(500).json({error:"No se pudo actualizar el contacto"})}
+});
+
 // Vincular manualmente un identificador LID con un contacto existente.
 app.post("/contactos/vincular", async (req,res)=>{
   const lid=String(req.body?.lid||"").trim();
