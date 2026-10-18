@@ -124,6 +124,14 @@ app.use(async(req,res,next)=>{
   res.setHeader("Cache-Control","no-store");
   return res.status(401).send("Autenticación requerida");
 });
+// Legacy endpoints still use global WhatsApp state and unscoped tables.
+// Deny them to all tenant operators until their tenant-scoped replacements exist.
+app.use((req,res,next)=>{
+  if(req.crmActor===crmUser)return next();
+  const legacy=/^\/(?:clientes|mensajes|contactos|recordatorios|recordatorios-proximos|seguimientos|dashboard|api\/informes|exportacion|exportar|enviar|enviar-audio|enviar-imagen|enviar-video|enviar-documento|enviar-lista-contactos|enviar-masivo|enviar-masivo-estado|enviar-masivo-variantes|subir-contactos|respuestas|asistente|campañas|qr\.json|notify\.json|auditoria)(?:\/|$)/;
+  if(legacy.test(req.path))return res.status(403).json({error:"Esta función usa datos del CRM heredado y no está habilitada para usuarios de empresas"});
+  next();
+});
 function requireAdmin(req,res,next){if(req.crmRole!=="admin")return res.status(403).json({error:"Se requieren permisos de administrador"});next()}
 app.use(express.json());
 app.use((req,res,next)=>{if(req.path==="/qr.json"||req.path==="/notify.json")return requireAdmin(req,res,next);next()});
