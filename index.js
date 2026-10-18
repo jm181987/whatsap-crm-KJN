@@ -735,6 +735,7 @@ function configurarManejoMensajes() {
       
       // Ignorar mensajes propios y estados
       if (msg.key.fromMe || !msg.message || msg.key.remoteJid === "status@broadcast") continue;
+      if (msg.message.protocolMessage || msg.message.senderKeyDistributionMessage || msg.message.messageContextInfo || msg.message.reactionMessage) continue;
 
       // WhatsApp may wrap incoming media in ephemeral/view-once containers.
       const wrapped = msg.message.ephemeralMessage?.message
@@ -930,12 +931,16 @@ async function procesarMensajeTexto(msg, numero, contacto, fecha) {
   const texto =
     msg.message.conversation ||
     msg.message.extendedTextMessage?.text ||
-    "(mensaje sin texto)";
+    msg.message.buttonsResponseMessage?.selectedDisplayText ||
+    msg.message.listResponseMessage?.title ||
+    msg.message.templateButtonReplyMessage?.selectedDisplayText ||
+    null;
+  if (!texto) { console.log("Mensaje sin contenido descifrado; se omite hasta recibir contenido válido:", Object.keys(msg.message)); return; }
 
   console.log("📝 Texto recibido:", texto.substring(0, 50) + "...");
 
   // Guardar mensaje en base de datos
-  guardarMensajeEnDB(numero, texto, 'recibido', fecha, null, null, 0);
+  await guardarMensajeEnDB(numero, texto, 'recibido', fecha, null, null, 0);
   
   actualizarCliente(numero, contacto, fecha);
   crearNotificacion(numero, contacto, texto, fecha);
