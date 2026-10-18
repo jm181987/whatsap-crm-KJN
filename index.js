@@ -762,12 +762,16 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 /* ========================================================
    INICIAR WHATSAPP
 ======================================================== */
+let mainWaRetry=null;
+let mainWaGeneration=0;
+function scheduleMainWhatsAppRetry(delay){clearTimeout(mainWaRetry);mainWaRetry=setTimeout(()=>{mainWaRetry=null;iniciarWhatsApp()},delay)}
 async function iniciarWhatsApp() {
+  const generation=++mainWaGeneration;
   try {
     const { state, saveCreds } = await useMultiFileAuthState(process.env.SESSION_DIR || "session");
     const { version } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
+    const socket = makeWASocket({
       version,
       auth: state,
       printQRInTerminal: false,
@@ -777,9 +781,11 @@ async function iniciarWhatsApp() {
       defaultQueryTimeoutMs: 60000
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    sock=socket;
+    socket.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("connection.update", async (update) => {
+    socket.ev.on("connection.update", async (update) => {
+      if(generation!==mainWaGeneration || sock!==socket)return;
       const { connection, qr, lastDisconnect } = update;
 
       if (qr) {
@@ -806,7 +812,8 @@ async function iniciarWhatsApp() {
         const reason = lastDisconnect?.error?.output?.statusCode;
         console.log("⚠️ Conexión cerrada:", reason);
         if (reason !== 401) {
-          setTimeout(iniciarWhatsApp, 5000);
+          sock=null;
+          scheduleMainWhatsAppRetry(5000);
         } else {
           console.warn("⚠️ Sesión principal desvinculada (401). Se conservarán las sesiones de otras empresas.");
           try {
@@ -821,7 +828,8 @@ async function iniciarWhatsApp() {
               }
             }
             console.log("🔐 Credenciales principales archivadas; preparando nuevo QR.");
-            setTimeout(iniciarWhatsApp,1500);
+            sock=null;
+            scheduleMainWhatsAppRetry(1500);
           }catch(err){console.error("No se pudieron archivar las credenciales de la sesión principal:",err)}
 
         }
@@ -829,11 +837,11 @@ async function iniciarWhatsApp() {
     });
 
     // Configurar manejo de mensajes
-    configurarManejoMensajes(sock);
+    configurarManejoMensajes(socket);
 
   } catch (error) {
     console.error("Error iniciando WhatsApp:", error);
-    setTimeout(iniciarWhatsApp, 10000);
+    scheduleMainWhatsAppRetry(10000);
   }
 }
 
