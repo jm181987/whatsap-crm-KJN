@@ -14,6 +14,7 @@ import qrcode from "qrcode";
 import fs from "fs";
 import multer from "multer";
 import { db, initDatabase, withTransaction } from "./postgres.js";
+import { createTenantWhatsApp } from "./tenant-whatsapp.js";
 import http from "http";
 import { timingSafeEqual, scrypt as scryptCallback, randomBytes, createHash } from "node:crypto";
 import path from "path";
@@ -202,6 +203,48 @@ app.post("/admin/tenants/:id/asignaciones",requireAdmin,async(req,res)=>{
 app.delete("/admin/tenants/:id/asignaciones/:cuenta/:usuario",requireAdmin,async(req,res)=>{
   try{await db.query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND usuario=$3",[req.params.id,req.params.cuenta,req.params.usuario]);res.json({ok:true})}
   catch(e){res.status(500).json({error:"Error quitando asignación"})}
+});
+const tenantWA=createTenantWhatsApp(db);
+async function tenantAccess(req,res,next){
+  const tenant=Number(req.params.tenantId),cuenta=Number(req.params.cuentaId);
+  if(!Number.isSafeInteger(tenant)||tenant<1||!Number.isSafeInteger(cuenta)||cuenta<1)return res.status(400).json({error:"Identificador inválido"});
+  try{
+    const rows=await db.query("SELECT c.id,c.tenant_id,c.nombre,t.modo_acceso FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id AND t.activo=TRUE WHERE c.id=$1 AND c.tenant_id=$2",[cuenta,tenant]);
+    if(!rows.length)return res.status(404).json({error:"Cuenta inexistente"});
+    const account=rows[0];
+    if(req.crmActor!==crmUser){
+      const members=await db.query("SELECT rol FROM crm_tenant_miembros WHERE tenant_id=$1 AND usuario=$2 AND activo=TRUE",[tenant,req.crmActor]);
+      if(!members.length)return res.status(403).json({error:"Sin acceso a esta empresa"});
+      const assigned=members[0].rol==="admin"||account.modo_acceso==="compartido"||(await db.query("SELECT 1 FROM crm_whatsapp_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND usuario=$3",[tenant,cuenta,req.crmActor])).length>0;
+      if(!assigned)return res.status(403).json({error:"WhatsApp no asignado"});
+      req.tenantRole=members[0].rol;
+    }else req.tenantRole="admin";
+    req.tenantAccount=account;next();
+  }catch(e){console.error("Tenant access:",e);res.status(500).json({error:"Error verificando acceso"})}
+}
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/estado",tenantAccess,(req,res)=>res.json(tenantWA.status(req.tenantAccount.id)));
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/conectar",tenantAccess,async(req,res)=>{
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Solo administradores"});
+  try{await tenantWA.start(req.tenantAccount);res.json(tenantWA.status(req.tenantAccount.id))}
+  catch(e){res.status(503).json({error:"No se pudo iniciar WhatsApp"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/contactos",tenantAccess,async(req,res)=>{
+  try{res.json(await db.query("SELECT numero,nombre FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY nombre,numero",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  catch(e){res.status(500).json({error:"No se pudieron consultar los contactos"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/mensajes",tenantAccess,async(req,res)=>{
+  const numero=String(req.query.numero||"");if(!numero)return res.status(400).json({error:"Número requerido"});
+  try{res.json(await db.query("SELECT id,numero,texto,direccion,fecha FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3 ORDER BY id DESC LIMIT 200",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]))}
+  catch(e){res.status(500).json({error:"No se pudieron consultar los mensajes"})}
+});
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,res)=>{
+  const numero=String(req.body?.numero||""),texto=String(req.body?.mensaje||"");
+  if(!/^[0-9]{5,20}@s\\.whatsapp\\.net$/.test(numero)||!texto||texto.length>4096)return res.status(400).json({error:"Número o mensaje inválido"});
+  try{
+    await tenantWA.send(req.tenantAccount.id,numero,texto);
+    await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,texto]);
+    res.json({ok:true});
+  }catch(e){res.status(503).json({error:e.message})}
 });
 app.get("/operadores/yo",(req,res)=>res.json({usuario:req.crmActor,rol:req.crmRole}));
 app.get("/operadores",requireAdmin,async(req,res)=>{
