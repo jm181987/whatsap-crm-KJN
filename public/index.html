@@ -880,6 +880,10 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-audit-row{padding:9px 2px;border-top:1px solid var(--wa-border);font-size:12px;overflow-wrap:anywhere}
 #wa-operator-create input,#wa-operator-create select,#wa-operator-create button,#wa-operators-list button{padding:9px;background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px}#wa-operators-list .wa-audit-row{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 #wa-rail{display:flex;flex-direction:column;align-items:center}#wa-rail .wa-logout-rail{margin-top:auto!important;color:#f1a9a9!important;border-top:1px solid var(--wa-border)!important}#wa-rail button{font-size:21px;line-height:1.2;display:flex;align-items:center;justify-content:center}#wa-rail button:focus-visible{outline:2px solid var(--wa-text);outline-offset:2px}@media(max-width:700px){#wa-rail .wa-logout-rail{margin-top:0!important;margin-left:auto!important}#wa-rail button{font-size:19px}}
+#wa-rail button[hidden],#wa-admin-panel[hidden]{display:none!important}
+#wa-admin-panel{position:absolute;inset:0 0 0 62px;z-index:100;background:var(--wa-panel);color:var(--wa-text);overflow:auto;padding:24px;box-sizing:border-box}
+#wa-admin-panel .wa-dash-card{max-width:1100px}
+@media(max-width:700px){#wa-admin-panel{inset:50px 0 0 0;padding:12px}}
   </style>
 </head>
 <body>
@@ -925,6 +929,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <button type="button" id="wa-nav-kanban" title="Módulo Kanban" aria-label="Kanban">🗂️</button>
     <button type="button" id="wa-nav-contactos" title="Agendar contacto" aria-label="Agendar contacto">👤</button>
     <button type="button" id="wa-nav-dash" title="Panel de actividad" aria-label="Panel de actividad">📊</button>
+    <button type="button" id="wa-nav-admin" title="Administración" aria-label="Administración" hidden>🛡️</button>
     <button type="button" id="wa-nav-pending" title="Pendientes" aria-label="Mensajes pendientes">🔔</button>
     <button type="button" id="wa-nav-theme" title="Cambiar tema" aria-label="Cambiar tema">🌓</button>
     <button type="button" id="wa-logout" class="wa-logout-rail" title="Cerrar sesión" aria-label="Cerrar sesión">🚪</button>
@@ -1048,6 +1053,12 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     </div>
     <p id="wa-pipeline-error" role="status" style="color:var(--wa-muted);font-size:12px"></p>
     <section class="wa-dash-card" id="wa-followups"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3>Agenda de seguimientos</h3><button type="button" id="wa-followups-refresh">Actualizar</button></div><p id="wa-followups-status" role="status"></p><div id="wa-followups-list"></div></section>
+    <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
+    <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
+    <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
+  </section>
+  <section id="wa-admin-panel" aria-label="Administración" hidden>
+    <div class="wa-dash-head"><div><h2>Administración</h2><p>Operadores y registro de actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
       <h3>Gestión de operadores</h3>
@@ -1060,9 +1071,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <p id="wa-operators-status" role="status"></p><div id="wa-operators-list"></div>
     </section>
     
-    <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
-    <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
-    <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
+
   </section>
   </main>
 
@@ -3174,7 +3183,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       }catch(err){status.textContent=err.message}
     }
     document.getElementById('wa-audit-refresh').onclick=loadAuditActivity;
-    document.getElementById('wa-nav-dash').addEventListener('click',loadAuditActivity);
+
     async function waOperatorRequest(url,options){
       const response=await fetch(url,{cache:'no-store',...options});
       const data=await response.json();
@@ -3212,7 +3221,29 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         form.reset();await waLoadOperators();status.textContent='Operador creado';
       }catch(err){status.textContent=err.message}
     });
-    document.getElementById('wa-nav-dash').addEventListener('click',waLoadOperators);
+
+    const waAdminPanel=document.getElementById('wa-admin-panel');
+    const waAdminNav=document.getElementById('wa-nav-admin');
+    async function waInitAdmin(){
+      try{
+        const response=await fetch('/operadores/yo',{cache:'no-store'});
+        if(!response.ok)return;
+        const me=await response.json();
+        waAdminNav.hidden=me.rol!=='admin';
+      }catch{}
+    }
+    waInitAdmin();
+    waAdminNav.addEventListener('click',async()=>{
+      const me=await waOperatorRequest('/operadores/yo').catch(()=>null);
+      if(me?.rol!=='admin')return;
+      document.getElementById('wa-dashboard').classList.remove('open');
+      waAdminPanel.hidden=false;
+      waAdminPanel.classList.add('open');
+      loadAuditActivity();
+      waLoadOperators();
+    });
+    document.getElementById('wa-admin-close').onclick=()=>{waAdminPanel.classList.remove('open');waAdminPanel.hidden=true};
+
     document.getElementById('wa-logout').addEventListener('click',async()=>{
       try{await fetch('/auth/logout',{method:'POST'});location.replace('/login.html')}
       catch(e){alert('No se pudo cerrar la sesión')}
