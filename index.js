@@ -75,6 +75,7 @@ app.post("/auth/logout",async(req,res)=>{
   res.setHeader("Set-Cookie",sessionCookieName+"=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0");
   res.json({ok:true});
 });
+app.get("/login.html",(req,res)=>res.sendFile(path.join(__dirname,"public","login.html")));
 app.use(async(req,res,next)=>{
   const header=req.headers.authorization||"";
   let username="",password="";
