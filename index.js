@@ -192,6 +192,7 @@ app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
       await query("DELETE FROM crm_tenant_mensajes WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_seguimientos WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_respuestas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_miembros WHERE tenant_id=$1",[id]);
@@ -325,6 +326,33 @@ app.patch("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios/:id",tenantAccess
 app.delete("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios/:id",tenantAccess,async(req,res)=>{
   try{const rows=await db.query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Recordatorio inexistente"});res.json({ok:true})}
   catch(e){res.status(500).json({error:"No se pudo eliminar recordatorio"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/respuestas",tenantAccess,async(req,res)=>{
+ try{res.json(await db.query("SELECT id,titulo,texto FROM crm_tenant_respuestas WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY titulo LIMIT 300",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+ catch(e){res.status(500).json({error:"No se pudieron consultar respuestas"})}
+});
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/respuestas",tenantAccess,async(req,res)=>{
+ const titulo=String(req.body?.titulo||"").trim(),texto=String(req.body?.texto||"").trim();
+ if(!titulo||titulo.length>100||!texto||texto.length>4096)return res.status(400).json({error:"Respuesta inválida"});
+ try{res.status(201).json((await db.query("INSERT INTO crm_tenant_respuestas(tenant_id,cuenta_id,titulo,texto) VALUES($1,$2,$3,$4) RETURNING id,titulo,texto",[req.tenantAccount.tenant_id,req.tenantAccount.id,titulo,texto]))[0])}
+ catch(e){res.status(500).json({error:"No se pudo guardar respuesta"})}
+});
+app.delete("/tenants/:tenantId/whatsapp/:cuentaId/respuestas/:id",tenantAccess,async(req,res)=>{
+ try{const rows=await db.query("DELETE FROM crm_tenant_respuestas WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Respuesta inexistente"});res.json({ok:true})}
+ catch(e){res.status(500).json({error:"No se pudo borrar respuesta"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/exportar",tenantAccess,async(req,res)=>{
+ const tipo=String(req.query.tipo||"");
+ if(!["contactos","mensajes","seguimientos","recordatorios"].includes(tipo))return res.status(400).json({error:"Exportación inválida"});
+ const cols={contactos:["numero","nombre","etiqueta","nota","archivado"],mensajes:["numero","texto","direccion","fecha"],seguimientos:["numero","descripcion","estado","creado_en"],recordatorios:["numero","mensaje","fecha_recordatorio","completado"]};
+ const tables={contactos:"crm_tenant_contactos",mensajes:"crm_tenant_mensajes",seguimientos:"crm_tenant_seguimientos",recordatorios:"crm_tenant_recordatorios"};
+ try{
+   const fields=cols[tipo];
+   const rows=await db.query("SELECT "+fields.join(",")+" FROM "+tables[tipo]+" WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY "+(tipo==="contactos"?"numero":"1")+" LIMIT 50000",[req.tenantAccount.tenant_id,req.tenantAccount.id]);
+   const escape=v=>'"'+String(v??"").replace(/"/g,'""').replace(/^[=+@-]/,"'app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard"")+'"';
+   const csv="\uFEFF"+fields.join(",")+"\r\n"+rows.map(row=>fields.map(f=>escape(row[f])).join(",")).join("\r\n");
+   res.set("Content-Type","text/csv; charset=utf-8");res.set("Content-Disposition",'attachment; filename="'+tipo+'-empresa-'+req.tenantAccount.tenant_id+'-cuenta-'+req.tenantAccount.id+'.csv"');res.send(csv);
+ }catch(e){console.error("Tenant export:",e);res.status(500).json({error:"No se pudo exportar"})}
 });
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard",tenantAccess,async(req,res)=>{
   const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
