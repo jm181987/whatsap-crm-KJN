@@ -1065,7 +1065,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <h3>Empresas y WhatsApp</h3>
 <form id="wa-tenant-create" style="display:flex;gap:8px;flex-wrap:wrap"><input name="nombre" placeholder="Nombre de empresa" required minlength="2" maxlength="120"><button>Crear empresa</button></form>
 <p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list"></div>
-<p style="font-size:12px">Las cuentas registradas aquí todavía no conectan WhatsApp. La activación multitenant requiere aislar los datos y las sesiones.</p>
+<p style="font-size:12px">Las cuentas nuevas usan sesiones independientes. La bandeja principal heredada aún no está aislada por empresa.</p>
 </section>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
@@ -3244,21 +3244,44 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     async function waLoadTenants(){
       const list=document.getElementById('wa-tenants-list'),status=document.getElementById('wa-tenants-status');
       try{
-        const tenants=await waOperatorRequest('/admin/tenants');
-        list.replaceChildren();
+        const tenants=await waOperatorRequest('/admin/tenants');list.replaceChildren();
         for(const tenant of tenants){
-          const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0';
-          const name=document.createElement('strong');name.textContent=tenant.nombre+' (#'+tenant.id+')';
+          const section=document.createElement('section');section.className='wa-dash-card';section.style.margin='12px 0';
+          const title=document.createElement('h4');title.textContent=tenant.nombre+' (#'+tenant.id+')';
           const mode=document.createElement('select');
-          for(const value of ['compartido','restringido']){const opt=document.createElement('option');opt.value=value;opt.textContent=value==='compartido'?'Todos los operadores':'Solo WhatsApp asignados';mode.appendChild(opt)}
+          for(const [value,label] of [['compartido','Todos los operadores'],['restringido','Solo WhatsApp asignados']]){
+            const option=document.createElement('option');option.value=value;option.textContent=label;mode.appendChild(option);
+          }
           mode.value=tenant.modo_acceso;
           mode.onchange=async()=>{try{await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({modo_acceso:mode.value})});status.textContent='Modo actualizado'}catch(e){status.textContent=e.message}};
-          const add=document.createElement('button');add.textContent='Registrar WhatsApp';add.type='button';
-          add.onclick=async()=>{const nombre=prompt('Nombre identificador del WhatsApp');if(!nombre)return;try{await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre})});status.textContent='Cuenta registrada (sin conexión activa)'}catch(e){status.textContent=e.message}};
-          row.append(name,mode,add);list.appendChild(row);
+          const add=document.createElement('button');add.type='button';add.textContent='Agregar WhatsApp';
+          add.onclick=async()=>{const nombre=prompt('Nombre de la cuenta de WhatsApp');if(!nombre)return;try{await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre})});await waLoadTenants()}catch(e){status.textContent=e.message}};
+          const accounts=document.createElement('div');
+          section.append(title,mode,add,accounts);list.appendChild(section);
+          const items=await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas');
+          for(const account of items){
+            const row=document.createElement('div');row.style.cssText='padding:10px 0;border-top:1px solid var(--wa-border);display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+            const label=document.createElement('strong');label.textContent=account.nombre+' (#'+account.id+')';
+            const state=document.createElement('span');state.textContent='Sin iniciar';
+            const connect=document.createElement('button');connect.type='button';connect.textContent='Conectar / QR';
+            const qr=document.createElement('img');qr.alt='QR de '+account.nombre;qr.style.cssText='display:none;width:220px;max-width:100%;background:white;padding:8px';
+            const refresh=async(start=false)=>{
+              try{
+                const url='/tenants/'+tenant.id+'/whatsapp/'+account.id;
+                if(start)await waOperatorRequest(url+'/conectar',{method:'POST'});
+                const data=await waOperatorRequest(url+'/estado');
+                state.textContent=data.estado;
+                if(data.qr){qr.src=data.qr;qr.style.display='block'}else{qr.removeAttribute('src');qr.style.display='none'}
+              }catch(e){state.textContent=e.message}
+            };
+            connect.onclick=()=>refresh(true);
+            const check=document.createElement('button');check.type='button';check.textContent='Actualizar estado';check.onclick=()=>refresh(false);
+            row.append(label,state,connect,check,qr);accounts.appendChild(row);refresh();
+          }
         }
       }catch(e){status.textContent=e.message}
     }
+
     document.getElementById('wa-tenant-create').addEventListener('submit',async e=>{
       e.preventDefault();const form=e.currentTarget;const nombre=new FormData(form).get('nombre');
       try{await waOperatorRequest('/admin/tenants',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre})});form.reset();waLoadTenants()}
