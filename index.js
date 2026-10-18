@@ -266,6 +266,16 @@ app.delete("/admin/tenants/:id/miembros/:usuario",requireAdmin,async(req,res)=>{
   }catch(e){res.status(500).json({error:"No se pudo revocar el acceso"})}
 });
 const tenantWA=createTenantWhatsApp(db);
+async function iniciarCuentasDeEmpresas(){
+  try{
+    const accounts=await db.query("SELECT c.id,c.tenant_id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id WHERE t.activo=TRUE ORDER BY c.id");
+    for(const account of accounts){
+      try{await tenantWA.start(account);console.log("Tenant WhatsApp iniciado:",account.tenant_id,account.id)}
+      catch(error){console.error("Tenant WhatsApp no iniciado:",account.tenant_id,account.id,error)}
+    }
+  }catch(error){console.error("No se pudieron restaurar las cuentas de empresas:",error)}
+}
+
 async function tenantAccess(req,res,next){
   const tenant=Number(req.params.tenantId),cuenta=Number(req.params.cuentaId);
   if(!Number.isSafeInteger(tenant)||tenant<1||!Number.isSafeInteger(cuenta)||cuenta<1)return res.status(400).json({error:"Identificador inválido"});
@@ -2777,6 +2787,7 @@ server.listen(Number(process.env.PORT || 3000), () => {
   console.log("⏰ Sistema de recordatorios activo");
   console.log("📊 Dashboard en tiempo real activo"); // 👈 NUEVA LÍNEA
   iniciarWhatsApp();
+  iniciarCuentasDeEmpresas().catch(error=>console.error("Tenant startup:",error));
   db.query("SELECT c.id,c.tenant_id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id WHERE t.activo=TRUE ORDER BY c.id")
     .then(async accounts=>{
       for(const account of accounts){
