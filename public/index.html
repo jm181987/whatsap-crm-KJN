@@ -1095,6 +1095,10 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <button type="button" id="wa-inbox-save-contact">Guardar contacto</button>
 </div>
 <div id="wa-inbox-messages"></div>
+<section id="wa-inbox-analytics" style="margin:12px 0"><h4>Indicadores de esta cuenta</h4><div id="wa-inbox-kpis"></div><div id="wa-inbox-kanban"></div></section>
+<details id="wa-inbox-followups"><summary>Seguimientos de esta cuenta</summary>
+<form id="wa-inbox-followup-form"><input id="wa-inbox-followup-text" maxlength="2000" required placeholder="Nuevo seguimiento para el contacto seleccionado"><button>Agregar</button></form>
+<div id="wa-inbox-followup-list"></div></details>
 <details id="wa-inbox-reminders"><summary>Recordatorios de esta cuenta</summary>
 <form id="wa-inbox-reminder-form"><input id="wa-inbox-reminder-date" type="datetime-local" required><input id="wa-inbox-reminder-text" placeholder="Recordatorio" maxlength="2000"><button>Agregar</button></form>
 <div id="wa-inbox-reminder-list"></div>
@@ -3299,6 +3303,42 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         box.appendChild(line);
       }
     }
+    async function waInboxDashboard(){
+      const kpis=document.getElementById('wa-inbox-kpis'),kanban=document.getElementById('wa-inbox-kanban');
+      kpis.replaceChildren();kanban.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const data=await waOperatorRequest(waInboxBase()+'/dashboard');
+      for(const key of ['contactos','mensajes','recibidos','enviados','recordatorios','seguimientos']){
+        const span=document.createElement('span');span.style.marginRight='14px';span.textContent=key+': '+data[key];kpis.append(span);
+      }
+      for(const item of data.kanban||[]){
+        const span=document.createElement('span');span.style.marginRight='14px';span.textContent=item.etiqueta+': '+item.total;kanban.append(span);
+      }
+    }
+    async function waInboxFollowups(){
+      const list=document.getElementById('wa-inbox-followup-list');list.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const items=await waOperatorRequest(waInboxBase()+'/seguimientos');
+      for(const item of items){
+        const row=document.createElement('div');row.style.margin='8px 0';
+        const label=document.createElement('span');label.textContent=item.numero+' · '+item.descripcion+' ';
+        const select=document.createElement('select');
+        for(const state of ['pendiente','en_progreso','completado'])select.add(new Option(state.replace('_',' '),state));
+        select.value=item.estado;
+        select.onchange=async()=>{try{await waOperatorRequest(waInboxBase()+'/seguimientos/'+item.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:select.value})});await waInboxDashboard()}catch(e){waInboxStatus.textContent=e.message}};
+        const del=document.createElement('button');del.type='button';del.textContent='Eliminar';
+        del.onclick=async()=>{if(!confirm('¿Eliminar seguimiento?'))return;try{await waOperatorRequest(waInboxBase()+'/seguimientos/'+item.id,{method:'DELETE'});await waInboxFollowups();await waInboxDashboard()}catch(e){waInboxStatus.textContent=e.message}};
+        row.append(label,select,del);list.append(row);
+      }
+    }
+    document.getElementById('wa-inbox-followup-form').onsubmit=async e=>{
+      e.preventDefault();
+      if(!waInboxNumber){waInboxStatus.textContent='Elegí primero un contacto';return}
+      try{
+        await waOperatorRequest(waInboxBase()+'/seguimientos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:waInboxNumber,descripcion:document.getElementById('wa-inbox-followup-text').value})});
+        e.currentTarget.reset();await waInboxFollowups();await waInboxDashboard();
+      }catch(err){waInboxStatus.textContent=err.message}
+    };
     let waInboxSelectedContact=null;
     async function waInboxReminders(){
       const list=document.getElementById('wa-inbox-reminder-list');list.replaceChildren();
@@ -3346,7 +3386,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
             try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
           };box.appendChild(button);
         }
-        await waInboxReminders();
+        await Promise.all([waInboxReminders(),waInboxFollowups(),waInboxDashboard()]);
       }catch(e){waInboxStatus.textContent=e.message}
     }
     waInboxTenant.onchange=async()=>{try{await waInboxAccounts();await waInboxContacts()}catch(e){waInboxStatus.textContent=e.message}};
