@@ -49,7 +49,9 @@ export function createTenantWhatsApp(db) {
           }
         });
         socket.ev.on("messages.upsert",async event=>{
+          console.log("📥 Tenant WhatsApp upsert:",key,event.type,"cantidad:",event.messages?.length||0);
           for(const msg of event.messages||[]){
+            try{
             if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
             if(msg.message.protocolMessage||msg.message.senderKeyDistributionMessage||msg.message.reactionMessage)continue;
             const numero=msg.key.remoteJid;
@@ -88,6 +90,7 @@ export function createTenantWhatsApp(db) {
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
               await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null]);
             }catch(e){console.error("Tenant message persistence:",e)}
+            }catch(e){console.error("Tenant incoming message error:",key,msg?.key?.id,e)}
           }
         });
       }catch(e){item.status="error";console.error("Tenant WhatsApp startup:",e);if(!item.stopped)item.retry=setTimeout(connect,10000)}
