@@ -8,7 +8,11 @@ export function createTenantWhatsApp(db) {
   const base = path.join(path.resolve(process.env.SESSION_DIR || "session"), "tenants");
   async function start(account) {
     const key = Number(account.id);
-    if (instances.has(key)) return instances.get(key).status;
+    if (instances.has(key)) {
+      const current=instances.get(key);
+      if(current.status==="sesion_cerrada"||current.status==="error"){stop(key)}
+      else return current.status;
+    }
     const item = {status:"iniciando",qr:null,socket:null,retry:null,stopped:false};
     instances.set(key,item);
     async function connect() {
@@ -29,7 +33,8 @@ export function createTenantWhatsApp(db) {
             item.socket=null;item.qr=null;
             const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
             item.status=loggedOut?"sesion_cerrada":"desconectado";
-            if(!loggedOut&&!item.stopped)item.retry=setTimeout(connect,5000);
+            if(loggedOut){console.warn("Tenant WhatsApp logged out; clear only this account credentials before reconnect:",dir)}
+           if(!loggedOut&&!item.stopped)item.retry=setTimeout(connect,5000);
           }
         });
         socket.ev.on("messages.upsert",async event=>{
