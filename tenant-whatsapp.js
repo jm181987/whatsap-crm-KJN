@@ -72,9 +72,20 @@ export function createTenantWhatsApp(db) {
     if(item?.status!=="conectado"||!item.socket)throw new Error("WhatsApp no conectado");
     await item.socket.sendMessage(numero,{text:texto});
   }
+  async function sendMedia(id,numero,{kind,data,mimeType,fileName,caption}){
+    const item=instances.get(Number(id));
+    if(item?.status!=="conectado"||!item.socket)throw new Error("WhatsApp no conectado");
+    const buffer=Buffer.from(data,"base64");
+    if(!buffer.length||buffer.length>8*1024*1024)throw new Error("Archivo vacío o superior a 8 MB");
+    const payload=kind==="image"?{image:buffer,mimetype:mimeType,caption:caption||""}:
+      kind==="video"?{video:buffer,mimetype:mimeType,caption:caption||""}:
+      kind==="audio"?{audio:buffer,mimetype:mimeType,ptt:false}:
+      {document:buffer,mimetype:mimeType,fileName:fileName||"archivo"};
+    await item.socket.sendMessage(numero,payload);
+  }
   function stop(id){
     const item=instances.get(Number(id));if(!item)return;
     item.stopped=true;clearTimeout(item.retry);item.socket?.end?.(new Error("Detenido por administrador"));instances.delete(Number(id));
   }
-  return {start,status,send,stop};
+  return {start,status,send,sendMedia,stop};
 }
