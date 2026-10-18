@@ -673,7 +673,22 @@ async function iniciarWhatsApp() {
         if (reason !== 401) {
           setTimeout(iniciarWhatsApp, 5000);
         } else {
-          console.log("❌ Sesión inválida, borra la carpeta /session y reconecta.");
+          console.warn("⚠️ Sesión principal desvinculada (401). Se conservarán las sesiones de otras empresas.");
+          try {
+            const sessionDir=path.resolve(process.env.SESSION_DIR || "session");
+            const archiveDir=path.join(sessionDir,"_invalidated_main_"+Date.now());
+            fs.mkdirSync(archiveDir,{recursive:true});
+            for(const entry of fs.readdirSync(sessionDir,{withFileTypes:true})){
+              // Never touch tenant credentials or prior backups.
+              if(!entry.isFile())continue;
+              if(entry.name==="creds.json"||entry.name.endsWith(".json")&&/^(?:app-state-sync-key|app-state-sync-version|pre-key|session|sender-key)-/.test(entry.name)){
+                fs.renameSync(path.join(sessionDir,entry.name),path.join(archiveDir,entry.name));
+              }
+            }
+            console.log("🔐 Credenciales principales archivadas; preparando nuevo QR.");
+            setTimeout(iniciarWhatsApp,1500);
+          }catch(err){console.error("No se pudieron archivar las credenciales de la sesión principal:",err)}
+
         }
       }
     });
