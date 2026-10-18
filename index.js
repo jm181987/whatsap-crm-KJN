@@ -2767,6 +2767,15 @@ server.listen(Number(process.env.PORT || 3000), () => {
   console.log("⏰ Sistema de recordatorios activo");
   console.log("📊 Dashboard en tiempo real activo"); // 👈 NUEVA LÍNEA
   iniciarWhatsApp();
+  db.query("SELECT c.id,c.tenant_id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id WHERE t.activo=TRUE ORDER BY c.id")
+    .then(async accounts=>{
+      for(const account of accounts){
+        const dir=path.join(path.resolve(process.env.SESSION_DIR||"session"),"tenants",String(account.tenant_id),String(account.id));
+        if(!fs.existsSync(path.join(dir,"creds.json")))continue;
+        try{await tenantWA.start(account);console.log("Restaurando WhatsApp empresa:",account.tenant_id,account.id)}
+        catch(err){console.error("Error restaurando WhatsApp empresa:",account.id,err)}
+      }
+    }).catch(err=>console.error("Error cargando conexiones empresariales:",err));
 
 });
 
