@@ -151,6 +151,22 @@ app.get("/auditoria/reciente",requireAdmin,async(req,res)=>{
   }catch(err){console.error("Error consultando auditoría:",err);res.status(500).json({error:"No se pudo consultar la actividad"})}
 });
 
+app.get("/admin/tenants",requireAdmin,async(req,res)=>{
+  try{res.json(await db.query("SELECT id,nombre,activo,modo_acceso FROM crm_tenants ORDER BY id"))}
+  catch(e){res.status(500).json({error:"Error consultando empresas"})}
+});
+app.post("/admin/tenants",requireAdmin,async(req,res)=>{
+  const nombre=String(req.body?.nombre||"").trim();
+  if(nombre.length<2||nombre.length>120)return res.status(400).json({error:"Nombre inválido"});
+  try{res.status(201).json((await db.query("INSERT INTO crm_tenants(nombre) VALUES($1) RETURNING id,nombre,modo_acceso",[nombre]))[0])}
+  catch(e){res.status(500).json({error:"Error creando empresa"})}
+});
+app.patch("/admin/tenants/:id",requireAdmin,async(req,res)=>{
+  const modo=req.body?.modo_acceso;
+  if(!["compartido","restringido"].includes(modo))return res.status(400).json({error:"Modo inválido"});
+  try{const rows=await db.query("UPDATE crm_tenants SET modo_acceso=$2 WHERE id=$1 RETURNING id,nombre,modo_acceso",[req.params.id,modo]);res.json(rows[0]||null)}
+  catch(e){res.status(500).json({error:"Error actualizando empresa"})}
+});
 app.get("/operadores/yo",(req,res)=>res.json({usuario:req.crmActor,rol:req.crmRole}));
 app.get("/operadores",requireAdmin,async(req,res)=>{
   try{res.json(await db.query("SELECT id,usuario,rol,activo,creado_en FROM crm_operadores ORDER BY id"))}
