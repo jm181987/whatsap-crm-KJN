@@ -299,6 +299,12 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/conectar",tenantAccess,async(req
   try{await tenantWA.start(req.tenantAccount);res.json(tenantWA.status(req.tenantAccount.id))}
   catch(e){res.status(503).json({error:"No se pudo iniciar WhatsApp"})}
 });
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/restablecer-sesion",tenantAccess,async(req,res)=>{
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Solo administradores"});
+  if(req.body?.confirmacion!=="RESTABLECER")return res.status(400).json({error:"Confirmá escribiendo RESTABLECER"});
+  try{await tenantWA.reset(req.tenantAccount);res.json(tenantWA.status(req.tenantAccount.id))}
+  catch(e){console.error("Tenant reset:",e);res.status(500).json({error:"No se pudo restablecer la sesión"})}
+});
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/contactos",tenantAccess,async(req,res)=>{
   try{res.json(await db.query("SELECT numero,nombre,etiqueta,nota,archivado FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY nombre,numero",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
   catch(e){res.status(500).json({error:"No se pudieron consultar los contactos"})}
