@@ -34,12 +34,12 @@ export function createTenantWhatsApp(db) {
         });
         socket.ev.on("messages.upsert",async event=>{
           for(const msg of event.messages||[]){
-            if(!msg.message||msg.key.remoteJid==="status@broadcast")continue;
+            if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
             const numero=msg.key.remoteJid;
             const texto=msg.message.conversation||msg.message.extendedTextMessage?.text||"";
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
-              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,$5)",[account.tenant_id,key,numero,texto,msg.key.fromMe?"enviado":"recibido"]);
+              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,$5)",[account.tenant_id,key,numero,texto,"recibido"]);
             }catch(e){console.error("Tenant message persistence:",e)}
           }
         });
