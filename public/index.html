@@ -874,6 +874,8 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-followup-row button,#wa-followups-refresh{background:var(--wa-card);border:1px solid var(--wa-border);color:var(--wa-text);padding:8px;border-radius:8px;cursor:pointer}
 #wa-profile-form input{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:9px}
 #wa-profile-form button{background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:9px;cursor:pointer}
+@media(max-width:700px){#wa-dashboard{padding:12px!important}.wa-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}.wa-dash-grid{grid-template-columns:minmax(0,1fr)!important}#wa-contact-panel{max-width:min(100vw,360px)!important;flex-basis:min(100vw,360px)!important}.wa-dash-card{min-width:0;overflow-wrap:anywhere}#enviar-area{flex-wrap:wrap}#wa-ai-suggest{font-size:12px}}
+#wa-ai-suggest{border-radius:8px;border:1px solid var(--wa-border);background:var(--wa-card);color:var(--wa-text);padding:8px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -1002,7 +1004,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <div id="wa-upload-progress" role="status" aria-live="polite" hidden><div class="wa-upload-head"><span id="wa-upload-label">Subiendo...</span><strong id="wa-upload-percent">0%</strong></div><progress id="wa-upload-bar" max="100" value="0"></progress></div>
     <div id="enviar-area">
       <input id="texto" placeholder="Escribe un mensaje...">
-      <button id="enviar">Enviar</button>
+      <button type="button" id="wa-ai-suggest" title="Generar borrador para revisar">✨ Sugerir</button><button id="enviar">Enviar</button>
       <button id="grabarAudio" title="Grabar nota de voz">🎤</button><div id="wa-mic-indicator" hidden role="status" aria-live="polite"><span class="wa-mic-dot"></span><span id="wa-mic-status">Grabando</span><div class="wa-mic-meter"><div id="wa-mic-level"></div></div><span id="wa-mic-time">0:00</span></div>
     </div>
 
@@ -1025,7 +1027,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   </aside>
   <section id="wa-dashboard" aria-label="Panel de actividad">
     <div class="wa-dash-head"><div><h2>Resumen de actividad</h2><p style="color:var(--wa-muted)">Conversaciones y atención de mensajes</p></div><button type="button" id="wa-dashboard-close">Volver a chats</button></div>
-    <div class="wa-dash-card" style="margin-top:14px"><h3>Exportación de datos comerciales</h3><p style="font-size:12px;color:var(--wa-muted)">Incluye contactos, fichas, notas, recordatorios y respuestas. No incluye conversaciones, archivos ni sesiones. Guardá el archivo en un lugar seguro.</p><a href="/exportacion/comercial.json" download="knj-crm-comercial.json" style="display:inline-block;padding:10px 14px;border:1px solid var(--wa-border);border-radius:9px;color:var(--wa-text);text-decoration:none">Descargar JSON comercial</a></div>
+    <div class="wa-dash-card" style="margin-top:14px"><h3>Exportación de datos comerciales</h3><p style="font-size:12px;color:var(--wa-muted)">Incluye contactos, fichas, notas, recordatorios y respuestas. No incluye conversaciones, archivos ni sesiones. Guardá el archivo en un lugar seguro.</p><a href="/exportacion/comercial.json" download="knj-crm-comercial.json" style="display:inline-block;padding:10px 14px;border:1px solid var(--wa-border);border-radius:9px;color:var(--wa-text);text-decoration:none">Descargar JSON comercial</a> <a href="/exportacion/respaldo.json" download="knj-crm-respaldo.json" style="display:inline-block;padding:10px 14px;border:1px solid var(--wa-border);border-radius:9px;color:var(--wa-text);text-decoration:none">Descargar respaldo con mensajes</a></div>
     <div class="wa-metrics">
       <div class="wa-metric"><span>Conversaciones (7 días)</span><strong id="wa-kpi-chats">—</strong></div>
       <div class="wa-metric"><span>Mensajes recibidos</span><strong id="wa-kpi-in">—</strong></div>
@@ -1218,6 +1220,24 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     const notif = document.getElementById('notif');
     const mensajesDiv = document.getElementById('mensajes');
     const textoInput = document.getElementById('texto');
+    document.getElementById('wa-ai-suggest').addEventListener('click',async()=>{
+      if(!clienteActual)return alert('Seleccioná un contacto primero');
+      const contexto=prompt('Pegá el mensaje del cliente para preparar una respuesta (máximo 3500 caracteres). Se enviará al proveedor de IA para generar una sugerencia.');
+      if(!contexto)return;
+      const button=document.getElementById('wa-ai-suggest');
+      button.disabled=true;button.textContent='Generando...';
+      try{
+        const response=await fetch('/asistente/sugerir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contexto})});
+        const data=await response.json();
+        if(!response.ok)throw Error(data.error||'No se pudo generar la sugerencia');
+        if(!confirm('Sugerencia de IA (revisá antes de usar):\\n\\n'+data.sugerencia+'\\n\\n¿Colocar este texto en el editor?'))return;
+        textoInput.value=data.sugerencia;
+        textoInput.dispatchEvent(new Event('input',{bubbles:true}));
+        textoInput.focus();
+      }catch(err){alert(err.message)}
+      finally{button.disabled=false;button.textContent='✨ Sugerir'}
+    });
+
     const notaBox = document.getElementById('nota');
     const toggleNotaBtn = document.getElementById('toggleNota');
     const cerrarChatBtn = document.getElementById('cerrarChat');
