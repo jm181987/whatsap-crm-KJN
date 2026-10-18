@@ -54,15 +54,15 @@ export function createTenantWhatsApp(db) {
             try{
             if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
             if(msg.message.protocolMessage||msg.message.senderKeyDistributionMessage||msg.message.reactionMessage)continue;
-            const numero=msg.key.remoteJid;
+            const numero=msg.key.remoteJidAlt?.endsWith("@s.whatsapp.net")?msg.key.remoteJidAlt:msg.key.remoteJid;
             let content=msg.message;
             for(let depth=0;depth<5;depth++){
               const nested=content.ephemeralMessage?.message||content.viewOnceMessageV2?.message||content.viewOnceMessage?.message||content.documentWithCaptionMessage?.message||content.viewOnceMessageV2Extension?.message;
               if(!nested)break;
               content=nested;
             }
-            const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":"");
-            if(!texto)continue;
+            const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||content.buttonsResponseMessage?.selectedDisplayText||content.listResponseMessage?.title||content.templateButtonReplyMessage?.selectedDisplayText||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":"");
+            if(!texto){console.warn("Tenant unsupported or undecrypted message",key,msg.key?.id,Object.keys(content));continue;}
             let mediaPath=null,mediaMime=null,mediaNombre=null;
             const media=content.imageMessage||content.videoMessage||content.audioMessage||content.documentMessage;
             if(media){
