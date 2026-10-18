@@ -35,8 +35,11 @@ export function createTenantWhatsApp(db) {
         socket.ev.on("messages.upsert",async event=>{
           for(const msg of event.messages||[]){
             if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
+            if(msg.message.protocolMessage||msg.message.senderKeyDistributionMessage||msg.message.reactionMessage)continue;
             const numero=msg.key.remoteJid;
-            const texto=msg.message.conversation||msg.message.extendedTextMessage?.text||"";
+            const content=msg.message.ephemeralMessage?.message||msg.message.viewOnceMessageV2?.message||msg.message.viewOnceMessage?.message||msg.message;
+            const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":"");
+            if(!texto)continue;
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
               await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,$5)",[account.tenant_id,key,numero,texto,"recibido"]);
