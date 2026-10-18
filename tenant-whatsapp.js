@@ -34,13 +34,18 @@ export function createTenantWhatsApp(db) {
         const {version}=await fetchLatestBaileysVersion();
         const socket=makeWASocket({version,auth:state,printQRInTerminal:false,syncFullHistory:false});
         item.socket=socket;
-        socket.ev.on("creds.update",saveCreds);
+        socket.ev.on("creds.update",async()=>{
+          if(item.stopped||item.socket!==socket)return;
+          try{await saveCreds()}catch(err){console.error("Tenant auth save failed:",key,err)}
+        });
         socket.ev.on("connection.update",update=>{
           if(item.stopped||item.socket!==socket)return;
           if(update.qr){qrcode.toDataURL(update.qr).then(data=>{if(!item.stopped&&item.socket===socket){item.qr=data;item.status="qr"}}).catch(e=>console.error("Tenant QR:",e))}
           if(update.connection==="open"){item.qr=null;item.status="conectado";}
           if(update.connection==="close"){
             item.socket=null;item.qr=null;
+            try{socket.ev.removeAllListeners("creds.update")}catch{}
+            try{socket.end?.(new Error("Tenant reconnect"))}catch{}
             const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
             item.status=loggedOut?"sesion_cerrada":"desconectado";
             if(loggedOut){
