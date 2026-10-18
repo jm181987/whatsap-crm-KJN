@@ -1503,6 +1503,25 @@ app.get("/clientes", async (req,res)=>{
   }catch(e){console.error("Error obteniendo clientes:",e);res.status(500).json({error:"Error interno"})}
 });
 
+// Indicadores comerciales basados en contactos reales (sin estimaciones).
+app.get("/dashboard/seguimiento",async(req,res)=>{
+  try{
+    const rows=await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE COALESCE(archivado,0)=0)::int AS activos,
+        COUNT(*) FILTER (WHERE COALESCE(archivado,0)=0 AND etiqueta='nuevo')::int AS nuevos,
+        COUNT(*) FILTER (WHERE COALESCE(archivado,0)=0 AND etiqueta='callback')::int AS callbacks,
+        COUNT(*) FILTER (WHERE COALESCE(archivado,0)=0 AND etiqueta='analista')::int AS analistas,
+        COUNT(*) FILTER (WHERE COALESCE(archivado,0)=0 AND ultima_interaccion IS NOT NULL
+          AND NULLIF(ultima_interaccion::text,'') IS NOT NULL
+          AND ultima_interaccion::text ~ '^\\d{4}-\\d{2}-\\d{2}'
+          AND LEFT(ultima_interaccion::text,10)::date < CURRENT_DATE - 3)::int AS sin_seguimiento
+      FROM clientes`);
+    res.setHeader("Cache-Control","no-store");
+    res.json(rows[0]||{activos:0,nuevos:0,callbacks:0,analistas:0,sin_seguimiento:0});
+  }catch(err){console.error("Error indicadores de seguimiento:",err);res.status(500).json({error:"No se pudieron calcular los indicadores"})}
+});
+
 // Cambiar estado
 app.put("/clientes/:numero/estado", (req, res) => {
   const { etiqueta, archivado } = req.body;
