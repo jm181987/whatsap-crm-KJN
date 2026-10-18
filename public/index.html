@@ -1022,6 +1022,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <div class="wa-metric"><span>Mensajes enviados</span><strong id="wa-kpi-out">—</strong></div>
       <div class="wa-metric"><span>Sin responder</span><strong id="wa-kpi-pending">—</strong></div>
     </div>
+    <div class="wa-metrics" id="wa-pipeline-metrics" aria-label="Seguimiento comercial">
+      <div class="wa-metric"><span>Contactos activos</span><strong id="wa-pipeline-active">—</strong></div>
+      <div class="wa-metric"><span>Nuevos</span><strong id="wa-pipeline-new">—</strong></div>
+      <div class="wa-metric"><span>Callback</span><strong id="wa-pipeline-callback">—</strong></div>
+      <div class="wa-metric"><span>Quiere analista</span><strong id="wa-pipeline-analyst">—</strong></div>
+      <div class="wa-metric"><span>Sin interacción hace más de 3 días</span><strong id="wa-pipeline-stale">—</strong></div>
+    </div>
+    <p id="wa-pipeline-error" role="status" style="color:var(--wa-muted);font-size:12px"></p>
     <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
     <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
     <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
@@ -3049,6 +3057,18 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         contactDialog.close();form.reset();await cargarClientes();
       }catch(err){error.textContent=err.message}
     };
+    async function loadPipelineMetrics(){
+      try{
+        const response=await fetch('/dashboard/seguimiento',{cache:'no-store'});
+        if(!response.ok)throw Error('HTTP '+response.status);
+        const data=await response.json();
+        for(const [key,id] of Object.entries({activos:'wa-pipeline-active',nuevos:'wa-pipeline-new',callbacks:'wa-pipeline-callback',analistas:'wa-pipeline-analyst',sin_seguimiento:'wa-pipeline-stale'})){
+          document.getElementById(id).textContent=Number(data[key]||0).toLocaleString('es-UY');
+        }
+        document.getElementById('wa-pipeline-error').textContent='Calculado a partir de los contactos guardados en el CRM.';
+      }catch(e){document.getElementById('wa-pipeline-error').textContent='No se pudieron cargar los indicadores: '+e.message}
+    }
+    document.getElementById('wa-nav-dash').addEventListener('click',loadPipelineMetrics);
     const waPendingBadge=document.getElementById('wa-nav-pending');
     const waPendingCount=document.getElementById('wa-pending-count');
     const waPendingObserver=new MutationObserver(() => {
