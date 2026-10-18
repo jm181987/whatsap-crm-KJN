@@ -371,6 +371,14 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/exportar",tenantAccess,async(req,
    res.set("Content-Type","text/csv; charset=utf-8");res.set("Content-Disposition",'attachment; filename="'+tipo+'-empresa-'+req.tenantAccount.tenant_id+'-cuenta-'+req.tenantAccount.id+'.csv"');res.send(csv);
  }catch(e){console.error("Tenant export:",e);res.status(500).json({error:"No se pudo exportar"})}
 });
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/informes/conversaciones",tenantAccess,async(req,res)=>{
+  const dias=Math.min(90,Math.max(1,Number.parseInt(req.query.dias,10)||14));
+  const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
+  try{
+    const daily=await db.query("SELECT TO_CHAR(fecha AT TIME ZONE 'UTC','YYYY-MM-DD') AS dia,COUNT(*)::int AS mensajes,COUNT(DISTINCT numero)::int AS conversaciones,COUNT(*) FILTER (WHERE direccion='recibido')::int AS recibidos,COUNT(*) FILTER (WHERE direccion='enviado')::int AS enviados FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND fecha >= NOW()-($3::int * INTERVAL '1 day') GROUP BY 1 ORDER BY 1",[t,c,dias]);
+    res.json({daily,pending:[],dias,scope:{tenant_id:t,cuenta_id:c}});
+  }catch(e){console.error("Tenant activity report:",e);res.status(500).json({error:"No se pudo generar el informe de la empresa"})}
+});
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard",tenantAccess,async(req,res)=>{
   const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
   try{
