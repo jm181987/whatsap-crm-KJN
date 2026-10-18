@@ -859,6 +859,10 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #wa-workspace.wa-kanban-active #kanban.wa-board-mode .cliente{flex-shrink:0;min-width:0;overflow-wrap:anywhere}
 #wa-workspace.wa-kanban-active #chat,#wa-workspace.wa-kanban-active #wa-empty,#wa-workspace.wa-kanban-active #wa-contact-panel{display:none!important}
 @media(max-width:800px){#wa-workspace.wa-kanban-active #kanban.wa-board-mode{grid-template-columns:repeat(6,minmax(220px,220px))}}
+#wa-board-summary:not([hidden]){display:flex;gap:7px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--wa-border)}
+.wa-board-chip{font-size:11px;padding:5px 9px;background:var(--wa-card);border:1px solid var(--wa-border);border-radius:14px;color:var(--wa-text)}
+#wa-contact-actions[hidden]{display:none!important}
+#wa-contact-actions a,#wa-contact-actions button{padding:8px 10px;border:1px solid var(--wa-border);border-radius:8px;background:var(--wa-card);color:var(--wa-text);text-decoration:none;font:inherit;font-size:12px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -911,6 +915,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <div id="wa-list-top"><h2 id="wa-list-title">Chats</h2><div class="wa-subtitle">Bandeja de conversaciones y seguimiento</div>
       <div id="wa-filterbar"><button type="button" data-filter="all" class="active">Todos</button><button type="button" data-filter="nuevo">Nuevos</button><button type="button" data-filter="callback">Callback</button><button type="button" data-filter="analista">Analista</button></div>
     </div>
+    <div id="wa-board-summary" hidden aria-live="polite"></div>
     <div class="kanban" id="kanban">
     <div class="column" data-etiqueta="nuevo" style="border-top:4px solid #00bcd4;"><h2>Nuevo</h2></div>
     <div class="column" data-etiqueta="callback" style="border-top:4px solid #f3e921;"><h2>Callback</h2></div>
@@ -935,7 +940,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <h3>Editar contacto</h3>
       <label>Nombre <input id="wa-edit-name" required maxlength="100" autocomplete="off"></label>
       <label>Identificador de WhatsApp <input id="wa-edit-number" readonly></label>
-      <small>El identificador no se modifica para proteger los mensajes. Para asociar un @lid con un teléfono, usá Vincular.</small><button type="button" id="wa-export-vcf">📱 Guardar en teléfono (.vcf)</button>
+      <small>El identificador no se modifica para proteger los mensajes. Para asociar un @lid con un teléfono, usá Vincular.</small><div id="wa-contact-actions" style="display:flex;gap:8px;flex-wrap:wrap"><a id="wa-call-phone" href="#" rel="noopener">📞 Llamar</a><a id="wa-call-whatsapp" href="#" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a><button type="button" id="wa-copy-phone">Copiar número</button></div><button type="button" id="wa-export-vcf">📱 Guardar en teléfono (.vcf)</button>
       <p id="wa-edit-error" role="alert" style="color:#ff7373"></p>
       <div style="display:flex;gap:8px"><button type="submit">Guardar cambios</button><button type="button" id="wa-edit-cancel">Cancelar</button></div>
     </form>
@@ -1233,6 +1238,15 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     let editingNumber=null;
     function editarContacto(c) {
       editingNumber=c.numero;
+      const phone=c.numero.split('@')[0].split(':')[0];
+      const valid=/^\\d{8,15}$/.test(phone)&&!c.numero.endsWith('@lid');
+      document.getElementById('wa-contact-actions').hidden=!valid;
+      document.getElementById('wa-export-vcf').disabled=!valid;
+      if(valid){
+        document.getElementById('wa-call-phone').href='tel:+'+phone;
+        document.getElementById('wa-call-whatsapp').href='https://wa.me/'+phone;
+        document.getElementById('wa-copy-phone').onclick=()=>navigator.clipboard.writeText('+'+phone).then(()=>alert('Número copiado')).catch(()=>alert('No se pudo copiar'));
+      }
       document.getElementById('wa-edit-name').value=c.nombre||'';
       document.getElementById('wa-edit-number').value=c.numero;
       document.getElementById('wa-edit-error').textContent='';
@@ -1270,6 +1284,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         });
         
         // Agregar clientes a las columnas
+        const boardSummary=document.getElementById('wa-board-summary');
+        boardSummary.replaceChildren();
+        document.querySelectorAll('#kanban .column').forEach(column=>{
+          const label=column.querySelector('h2').textContent;
+          const count=clientes.filter(c=>(c.archivado?'archivado':c.etiqueta)===column.dataset.etiqueta).length;
+          const chip=document.createElement('span');chip.className='wa-board-chip';chip.textContent=label+' · '+count;boardSummary.appendChild(chip);
+          column.querySelector('h2').textContent=label.replace(/ · \\d+$/,'')+' · '+count;
+        });
         clientes.forEach(c => {
           const col = document.querySelector(`[data-etiqueta="${c.archivado ? 'archivado' : c.etiqueta}"]`);
           if (col) {
@@ -2983,6 +3005,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       kanbanRoot.classList.toggle('wa-board-mode',enabled);
       document.getElementById('wa-workspace').classList.toggle('wa-kanban-active',enabled);
       kanbanTitle.textContent=enabled?'Kanban':'Chats';
+      document.getElementById('wa-board-summary').hidden=!enabled;
       document.getElementById('wa-nav-kanban').classList.toggle('active',enabled);
       document.getElementById('wa-nav-chats').classList.toggle('active',!enabled);
     }
