@@ -239,7 +239,7 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/mensajes",tenantAccess,async(req,
 });
 app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,res)=>{
   const numero=String(req.body?.numero||""),texto=String(req.body?.mensaje||"");
-  if(!/^[0-9]{5,20}@s\\.whatsapp\\.net$/.test(numero)||!texto||texto.length>4096)return res.status(400).json({error:"Número o mensaje inválido"});
+  if(!numero.endsWith("@s.whatsapp.net")||!/^[0-9]{5,20}$/.test(numero.slice(0,-15))||!texto||texto.length>4096)return res.status(400).json({error:"Número o mensaje inválido"});
   try{
     await tenantWA.send(req.tenantAccount.id,numero,texto);
     await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,texto]);
