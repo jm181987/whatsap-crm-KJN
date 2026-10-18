@@ -167,6 +167,28 @@ app.patch("/admin/tenants/:id",requireAdmin,async(req,res)=>{
   try{const rows=await db.query("UPDATE crm_tenants SET modo_acceso=$2 WHERE id=$1 RETURNING id,nombre,modo_acceso",[req.params.id,modo]);res.json(rows[0]||null)}
   catch(e){res.status(500).json({error:"Error actualizando empresa"})}
 });
+app.get("/admin/tenants/:id/cuentas",requireAdmin,async(req,res)=>{
+  try{res.json(await db.query("SELECT id,nombre,estado FROM crm_whatsapp_cuentas WHERE tenant_id=$1 ORDER BY id",[req.params.id]))}
+  catch(e){res.status(500).json({error:"Error consultando cuentas"})}
+});
+app.post("/admin/tenants/:id/cuentas",requireAdmin,async(req,res)=>{
+  const nombre=String(req.body?.nombre||"").trim();
+  if(nombre.length<2||nombre.length>100)return res.status(400).json({error:"Nombre inválido"});
+  try{res.status(201).json((await db.query("INSERT INTO crm_whatsapp_cuentas(tenant_id,nombre,session_key) VALUES($1,$2,$3) RETURNING id,nombre,estado",[req.params.id,nombre,"tenant-"+req.params.id+"-"+randomBytes(12).toString("hex")]))[0])}
+  catch(e){res.status(400).json({error:"Empresa inválida o cuenta duplicada"})}
+});
+app.get("/admin/tenants/:id/miembros",requireAdmin,async(req,res)=>{
+  try{res.json(await db.query("SELECT usuario,rol,activo FROM crm_tenant_miembros WHERE tenant_id=$1 ORDER BY usuario",[req.params.id]))}
+  catch(e){res.status(500).json({error:"Error consultando miembros"})}
+});
+app.post("/admin/tenants/:id/miembros",requireAdmin,async(req,res)=>{
+  const usuario=String(req.body?.usuario||"").trim(),rol=req.body?.rol;
+  if(!usuario||!["admin","operador"].includes(rol))return res.status(400).json({error:"Datos inválidos"});
+  try{
+    if(usuario!==crmUser&&!((await db.query("SELECT 1 FROM crm_operadores WHERE usuario=$1 AND activo=TRUE",[usuario])).length))return res.status(404).json({error:"Operador inexistente"});
+    res.json((await db.query("INSERT INTO crm_tenant_miembros(tenant_id,usuario,rol) VALUES($1,$2,$3) ON CONFLICT(tenant_id,usuario) DO UPDATE SET rol=EXCLUDED.rol,activo=TRUE RETURNING usuario,rol,activo",[req.params.id,usuario,rol]))[0]);
+  }catch(e){res.status(400).json({error:"No se pudo asignar el miembro"})}
+});
 app.get("/operadores/yo",(req,res)=>res.json({usuario:req.crmActor,rol:req.crmRole}));
 app.get("/operadores",requireAdmin,async(req,res)=>{
   try{res.json(await db.query("SELECT id,usuario,rol,activo,creado_en FROM crm_operadores ORDER BY id"))}
