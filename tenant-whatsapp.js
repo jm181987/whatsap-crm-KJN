@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadContentFromMessage } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
 import { randomUUID } from "node:crypto";
 
@@ -53,7 +53,12 @@ export function createTenantWhatsApp(db) {
             if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
             if(msg.message.protocolMessage||msg.message.senderKeyDistributionMessage||msg.message.reactionMessage)continue;
             const numero=msg.key.remoteJid;
-            const content=msg.message.ephemeralMessage?.message||msg.message.viewOnceMessageV2?.message||msg.message.viewOnceMessage?.message||msg.message.documentWithCaptionMessage?.message||msg.message;
+            let content=msg.message;
+            for(let depth=0;depth<5;depth++){
+              const nested=content.ephemeralMessage?.message||content.viewOnceMessageV2?.message||content.viewOnceMessage?.message||content.documentWithCaptionMessage?.message||content.viewOnceMessageV2Extension?.message;
+              if(!nested)break;
+              content=nested;
+            }
             const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":"");
             if(!texto)continue;
             let mediaPath=null,mediaMime=null,mediaNombre=null;
@@ -63,8 +68,14 @@ export function createTenantWhatsApp(db) {
               mediaMime=String(media.mimetype||"application/octet-stream").split(";")[0];
               mediaNombre=String(media.fileName||kind).slice(0,150);
               try{
-                const normalizedMessage={...msg,message:content};
-                const buffer=await downloadMediaMessage(normalizedMessage,"buffer",{}, {logger:console,reuploadRequest:socket.updateMediaMessage?.bind(socket)});
+                const stream=await downloadContentFromMessage(media,kind);
+                const chunks=[];let size=0;
+                for await(const chunk of stream){
+                  size+=chunk.length;
+                  if(size>30*1024*1024)throw new Error("El archivo supera 30 MB");
+                  chunks.push(chunk);
+                }
+                const buffer=Buffer.concat(chunks);
                 if(buffer?.length&&buffer.length<=30*1024*1024){
                   const mediaDir=path.join(base,String(account.tenant_id),String(key),"media");
                   fs.mkdirSync(mediaDir,{recursive:true,mode:0o700});
