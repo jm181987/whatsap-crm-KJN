@@ -189,6 +189,20 @@ app.post("/admin/tenants/:id/miembros",requireAdmin,async(req,res)=>{
     res.json((await db.query("INSERT INTO crm_tenant_miembros(tenant_id,usuario,rol) VALUES($1,$2,$3) ON CONFLICT(tenant_id,usuario) DO UPDATE SET rol=EXCLUDED.rol,activo=TRUE RETURNING usuario,rol,activo",[req.params.id,usuario,rol]))[0]);
   }catch(e){res.status(400).json({error:"No se pudo asignar el miembro"})}
 });
+app.get("/admin/tenants/:id/asignaciones",requireAdmin,async(req,res)=>{
+  try{res.json(await db.query("SELECT cuenta_id,usuario FROM crm_whatsapp_asignaciones WHERE tenant_id=$1 ORDER BY cuenta_id,usuario",[req.params.id]))}
+  catch(e){res.status(500).json({error:"Error consultando asignaciones"})}
+});
+app.post("/admin/tenants/:id/asignaciones",requireAdmin,async(req,res)=>{
+  const cuenta=Number(req.body?.cuenta_id),usuario=String(req.body?.usuario||"").trim();
+  if(!Number.isSafeInteger(cuenta)||cuenta<=0||!usuario)return res.status(400).json({error:"Datos inválidos"});
+  try{await db.query("INSERT INTO crm_whatsapp_asignaciones(tenant_id,cuenta_id,usuario) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[req.params.id,cuenta,usuario]);res.json({ok:true})}
+  catch(e){res.status(400).json({error:"La cuenta y el operador deben pertenecer a la misma empresa"})}
+});
+app.delete("/admin/tenants/:id/asignaciones/:cuenta/:usuario",requireAdmin,async(req,res)=>{
+  try{await db.query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND usuario=$3",[req.params.id,req.params.cuenta,req.params.usuario]);res.json({ok:true})}
+  catch(e){res.status(500).json({error:"Error quitando asignación"})}
+});
 app.get("/operadores/yo",(req,res)=>res.json({usuario:req.crmActor,rol:req.crmRole}));
 app.get("/operadores",requireAdmin,async(req,res)=>{
   try{res.json(await db.query("SELECT id,usuario,rol,activo,creado_en FROM crm_operadores ORDER BY id"))}
