@@ -15,7 +15,7 @@ import fs from "fs";
 import multer from "multer";
 import { db, initDatabase, withTransaction } from "./postgres.js";
 import http from "http";
-import { timingSafeEqual, scrypt as scryptCallback, randomBytes } from "node:crypto";
+import { timingSafeEqual, scrypt as scryptCallback, randomBytes, createHash } from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Parser } from "json2csv";
@@ -48,6 +48,33 @@ async function verifyPassword(password,stored){
   const actual=await scrypt(password,salt,expected.length);
   return timingSafeEqual(actual,expected);
 }
+const sessionCookieName="knj_crm_session";
+const digestSession=token=>createHash("sha256").update(token).digest("hex");
+app.use(express.json({limit:"1mb"}));
+app.post("/auth/login",async(req,res)=>{
+  const usuario=String(req.body?.usuario||"");
+  const password=String(req.body?.password||"");
+  if(!usuario||!password||usuario.length>40||password.length>128)return res.status(400).json({error:"Credenciales inválidas"});
+  try{
+    let role=null;
+    if(secureEqual(usuario,crmUser)&&secureEqual(password,crmPassword))role="admin";
+    else{
+      const rows=await db.query("SELECT password_hash,rol FROM crm_operadores WHERE usuario=$1 AND activo=TRUE",[usuario]);
+      if(rows.length&&await verifyPassword(password,rows[0].password_hash))role=rows[0].rol;
+    }
+    if(!role)return res.status(401).json({error:"Credenciales incorrectas"});
+    const token=randomBytes(32).toString("hex");
+    await db.query("INSERT INTO crm_sesiones(token_hash,usuario,vence) VALUES($1,$2,NOW()+INTERVAL '8 hours')",[digestSession(token),usuario]);
+    res.setHeader("Set-Cookie",sessionCookieName+"="+token+"; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800");
+    res.json({usuario,rol:role});
+  }catch(e){console.error("Login:",e);res.status(503).json({error:"Login no disponible"})}
+});
+app.post("/auth/logout",async(req,res)=>{
+  const token=(req.headers.cookie||"").split(";").map(x=>x.trim()).find(x=>x.startsWith(sessionCookieName+"="))?.slice(sessionCookieName.length+1);
+  if(token)await db.query("DELETE FROM crm_sesiones WHERE token_hash=$1",[digestSession(token)]).catch(e=>console.error(e.message));
+  res.setHeader("Set-Cookie",sessionCookieName+"=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0");
+  res.json({ok:true});
+});
 app.use(async(req,res,next)=>{
   const header=req.headers.authorization||"";
   let username="",password="";
