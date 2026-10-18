@@ -6,6 +6,13 @@ import qrcode from "qrcode";
 export function createTenantWhatsApp(db) {
   const instances = new Map();
   const base = path.join(path.resolve(process.env.SESSION_DIR || "session"), "tenants");
+  function archiveInvalidSession(dir) {
+    const archive=path.join(dir,"_invalidated_"+Date.now());
+    fs.mkdirSync(archive,{recursive:true});
+    for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
+      if(entry.isFile()&&entry.name.endsWith(".json"))fs.renameSync(path.join(dir,entry.name),path.join(archive,entry.name));
+    }
+  }
   async function start(account) {
     const key = Number(account.id);
     if (instances.has(key)) {
@@ -33,7 +40,8 @@ export function createTenantWhatsApp(db) {
             item.socket=null;item.qr=null;
             const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
             item.status=loggedOut?"sesion_cerrada":"desconectado";
-            if(loggedOut){console.warn("Tenant WhatsApp logged out; clear only this account credentials before reconnect:",dir)}
+            if(loggedOut){
+             try{archiveInvalidSession(dir);item.status="reconectando";item.retry=setTimeout(connect,1500)}\n             catch(err){item.status="sesion_cerrada";console.error("Tenant session archive failed:",err)}\n           }
            if(!loggedOut&&!item.stopped)item.retry=setTimeout(connect,5000);
           }
         });
