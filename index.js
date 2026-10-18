@@ -182,15 +182,25 @@ app.patch("/admin/tenants/:id",requireAdmin,async(req,res)=>{
 app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
   const id=Number(req.params.id);
   if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:"Empresa inválida"});
+  if(req.body?.confirmacion!=="ELIMINAR")return res.status(400).json({error:"Confirmación requerida: ELIMINAR"});
   try{
-    const rows=await db.query("SELECT id,nombre FROM crm_tenants WHERE id=$1",[id]);
-    if(!rows.length)return res.status(404).json({error:"Empresa inexistente"});
-    const counts=await db.query("SELECT (SELECT COUNT(*) FROM crm_whatsapp_cuentas WHERE tenant_id=$1)::int AS cuentas,(SELECT COUNT(*) FROM crm_tenant_mensajes WHERE tenant_id=$1)::int AS mensajes",[id]);
-    if(counts[0].cuentas>0||counts[0].mensajes>0)return res.status(409).json({error:"La empresa tiene cuentas o conversaciones. Eliminá o migrá sus datos antes de borrarla; no se eliminarán chats automáticamente."});
-    await db.query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1",[id]);
-    await db.query("DELETE FROM crm_tenant_miembros WHERE tenant_id=$1",[id]);
-    await db.query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
-    await db.query("DELETE FROM crm_tenants WHERE id=$1",[id]);
+    const result=await withTransaction(async query=>{
+      const rows=await query("SELECT id,nombre FROM crm_tenants WHERE id=$1 FOR UPDATE",[id]);
+      if(!rows.rows.length)return null;
+      const accounts=await query("SELECT id FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_mensajes WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_miembros WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenants WHERE id=$1",[id]);
+      return {nombre:rows.rows[0].nombre,cuentas:accounts.rows.map(x=>Number(x.id))};
+    });
+    if(!result)return res.status(404).json({error:"Empresa inexistente"});
+    for(const cuenta of result.cuentas)tenantWA.stop(cuenta);
+    const sessionDir=path.join(path.resolve(process.env.SESSION_DIR||"session"),"tenants",String(id));
+    try{fs.rmSync(sessionDir,{recursive:true,force:true})}
+    catch(err){console.error("No se pudo borrar sesión de empresa eliminada:",id,err);return res.status(207).json({ok:true,advertencia:"Empresa y datos eliminados, pero hay archivos de sesión pendientes de limpieza"})}
     res.json({ok:true});
   }catch(e){console.error("Deleting tenant:",e);res.status(500).json({error:"No se pudo eliminar la empresa"})}
 });
