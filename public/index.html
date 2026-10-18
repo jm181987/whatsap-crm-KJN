@@ -863,6 +863,9 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-board-chip{font-size:11px;padding:5px 9px;background:var(--wa-card);border:1px solid var(--wa-border);border-radius:14px;color:var(--wa-text)}
 #wa-contact-actions[hidden]{display:none!important}
 #wa-contact-actions a,#wa-contact-actions button{padding:8px 10px;border:1px solid var(--wa-border);border-radius:8px;background:var(--wa-card);color:var(--wa-text);text-decoration:none;font:inherit;font-size:12px;cursor:pointer}
+#wa-smart-tools{display:flex;gap:8px;padding:9px 12px;flex-wrap:wrap;border-bottom:1px solid var(--wa-border)}
+#wa-smart-tools input,#wa-smart-tools select{min-width:0;flex:1 1 130px;background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:9px;padding:9px}
+#wa-workspace.wa-kanban-active #wa-smart-tools{flex-shrink:0}
   </style>
 </head>
 <body>
@@ -915,6 +918,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <div id="wa-list-top"><h2 id="wa-list-title">Chats</h2><div class="wa-subtitle">Bandeja de conversaciones y seguimiento</div>
       <div id="wa-filterbar"><button type="button" data-filter="all" class="active">Todos</button><button type="button" data-filter="nuevo">Nuevos</button><button type="button" data-filter="callback">Callback</button><button type="button" data-filter="analista">Analista</button></div>
     </div>
+    <div id="wa-smart-tools"><input id="wa-smart-search" type="search" placeholder="Buscar por nombre, teléfono o nota" aria-label="Buscar contactos"><select id="wa-smart-status" aria-label="Filtrar por estado"><option value="all">Todos los estados</option><option value="nuevo">Nuevo</option><option value="callback">Callback</option><option value="analista">Quiere Analista</option><option value="grupos">Grupos</option><option value="bloqueado">Bloqueado</option><option value="archivado">Archivado</option></select></div>
     <div id="wa-board-summary" hidden aria-live="polite"></div>
     <div class="kanban" id="kanban">
     <div class="column" data-etiqueta="nuevo" style="border-top:4px solid #00bcd4;"><h2>Nuevo</h2></div>
@@ -1278,21 +1282,32 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         const res = await fetch('/clientes');
         const clientes = await res.json();
         
-        // Limpiar columnas
-        document.querySelectorAll('.column').forEach(c => {
-          c.innerHTML = '<h2>' + c.querySelector('h2').textContent + '</h2>';
+        // Encabezados estables: no acumular contadores en cada actualización.
+        document.querySelectorAll('#kanban .column').forEach(column=>{
+          const title=column.querySelector('h2');
+          const label=title.dataset.label||title.textContent.replace(/ · \d+$/,'');
+          title.dataset.label=label;
+          column.querySelectorAll('.cliente').forEach(card=>card.remove());
+          const count=clientes.filter(c=>(c.archivado?'archivado':c.etiqueta)===column.dataset.etiqueta).length;
+          title.textContent=label+' · '+count;
         });
-        
-        // Agregar clientes a las columnas
         const boardSummary=document.getElementById('wa-board-summary');
         boardSummary.replaceChildren();
         document.querySelectorAll('#kanban .column').forEach(column=>{
-          const label=column.querySelector('h2').textContent;
-          const count=clientes.filter(c=>(c.archivado?'archivado':c.etiqueta)===column.dataset.etiqueta).length;
-          const chip=document.createElement('span');chip.className='wa-board-chip';chip.textContent=label+' · '+count;boardSummary.appendChild(chip);
-          column.querySelector('h2').textContent=label.replace(/ · \d+$/,'')+' · '+count;
+          const chip=document.createElement('span');
+          chip.className='wa-board-chip';
+          chip.textContent=column.querySelector('h2').textContent;
+          boardSummary.appendChild(chip);
         });
-        clientes.forEach(c => {
+        const term=document.getElementById('wa-smart-search')?.value.trim().toLocaleLowerCase()||'';
+        const status=document.getElementById('wa-smart-status')?.value||'all';
+        const visibleClientes=clientes.filter(c=>{
+          const text=[c.nombre,c.numero,c.nota].join(' ').toLocaleLowerCase();
+          const matchesTerm=!term||text.includes(term);
+          const matchesStatus=status==='all'||(status==='archivado'?!!c.archivado:!c.archivado&&c.etiqueta===status);
+          return matchesTerm&&matchesStatus;
+        });
+        visibleClientes.forEach(c => {
           const col = document.querySelector(`[data-etiqueta="${c.archivado ? 'archivado' : c.etiqueta}"]`);
           if (col) {
             const div = document.createElement('div');
@@ -3011,6 +3026,12 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     }
     document.getElementById('wa-nav-kanban').onclick=()=>{setKanbanMode(true);waDashboard.classList.remove('open')};
     document.getElementById('wa-nav-chats').addEventListener('click',()=>setKanbanMode(false));
+    let waSearchDebounce;
+    document.getElementById('wa-smart-search').addEventListener('input',()=>{
+      clearTimeout(waSearchDebounce);
+      waSearchDebounce=setTimeout(()=>cargarClientes(),250);
+    });
+    document.getElementById('wa-smart-status').addEventListener('change',()=>cargarClientes());
     const contactDialog=document.getElementById('wa-contact-dialog');
     document.getElementById('wa-nav-contactos').onclick=()=>contactDialog.showModal();
     document.getElementById('wa-contact-cancel').onclick=()=>contactDialog.close();
