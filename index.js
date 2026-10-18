@@ -125,6 +125,7 @@ app.use(async(req,res,next)=>{
 });
 function requireAdmin(req,res,next){if(req.crmRole!=="admin")return res.status(403).json({error:"Se requieren permisos de administrador"});next()}
 app.use(express.json());
+app.use((req,res,next)=>{if(req.path==="/qr.json"||req.path==="/notify.json")return requireAdmin(req,res,next);next()});
 app.use(express.static(path.join(__dirname, "public"),{index:false,dotfiles:"deny",setHeaders:(res,file)=>{if(file.endsWith(".json"))res.setHeader("Cache-Control","no-store")}}));
 // Ruta principal explícita para comprobar que el CRM sirve su interfaz.
 app.get("/", (req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
