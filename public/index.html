@@ -1087,7 +1087,18 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list" class="wa-tenant-grid"></div>
 <p style="font-size:12px;color:var(--wa-muted)">Cada empresa tiene su propia conexión y sus chats se consultan en <strong>Bandeja por empresa</strong>, seleccionando la empresa y el número de WhatsApp. La bandeja principal muestra únicamente la conexión original; no combina conversaciones de las otras empresas.</p>
 </section>
-    <section class="wa-dash-card" id="wa-tenant-inbox"><h3>Bandeja por empresa</h3><select id="wa-inbox-tenant"></select><select id="wa-inbox-account"></select><button id="wa-inbox-reload" type="button">Actualizar</button><div id="wa-inbox-contacts"></div><strong id="wa-inbox-title"></strong><div id="wa-inbox-messages"></div><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><p id="wa-inbox-status"></p></section>
+    <section class="wa-dash-card" id="wa-tenant-inbox"><h3>Bandeja por empresa</h3><select id="wa-inbox-tenant"></select><select id="wa-inbox-account"></select><button id="wa-inbox-reload" type="button">Actualizar</button><div id="wa-inbox-contacts"></div><strong id="wa-inbox-title"></strong>
+<div id="wa-inbox-contact-tools" hidden>
+<label>Estado <select id="wa-inbox-label"><option value="nuevo">Nuevo</option><option value="callback">Callback</option><option value="analista">Analista</option><option value="cerrado">Cerrado</option></select></label>
+<label>Nota <textarea id="wa-inbox-note" rows="2" placeholder="Notas internas de este contacto"></textarea></label>
+<label><input type="checkbox" id="wa-inbox-archived"> Archivado</label>
+<button type="button" id="wa-inbox-save-contact">Guardar contacto</button>
+</div>
+<div id="wa-inbox-messages"></div>
+<details id="wa-inbox-reminders"><summary>Recordatorios de esta cuenta</summary>
+<form id="wa-inbox-reminder-form"><input id="wa-inbox-reminder-date" type="datetime-local" required><input id="wa-inbox-reminder-text" placeholder="Recordatorio" maxlength="2000"><button>Agregar</button></form>
+<div id="wa-inbox-reminder-list"></div>
+</details><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><p id="wa-inbox-status"></p></section>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
       <h3>Gestión de operadores</h3>
@@ -3288,8 +3299,39 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         box.appendChild(line);
       }
     }
+    let waInboxSelectedContact=null;
+    async function waInboxReminders(){
+      const list=document.getElementById('wa-inbox-reminder-list');list.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const items=await waOperatorRequest(waInboxBase()+'/recordatorios');
+      for(const reminder of items){
+        const row=document.createElement('div');row.className='wa-inbox-reminder-row';
+        const check=document.createElement('input');check.type='checkbox';check.checked=reminder.completado;
+        check.onchange=async()=>{try{await waOperatorRequest(waInboxBase()+'/recordatorios/'+reminder.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({completado:check.checked})})}catch(e){waInboxStatus.textContent=e.message}};
+        const label=document.createElement('span');label.textContent=new Date(reminder.fecha_recordatorio).toLocaleString()+' · '+reminder.numero+' · '+reminder.mensaje;
+        const del=document.createElement('button');del.type='button';del.textContent='Eliminar';del.onclick=async()=>{if(!confirm('¿Eliminar recordatorio?'))return;try{await waOperatorRequest(waInboxBase()+'/recordatorios/'+reminder.id,{method:'DELETE'});await waInboxReminders()}catch(e){waInboxStatus.textContent=e.message}};
+        row.append(check,label,del);list.append(row);
+      }
+    }
+    document.getElementById('wa-inbox-reminder-form').onsubmit=async e=>{
+      e.preventDefault();
+      if(!waInboxNumber){waInboxStatus.textContent='Elegí primero un contacto';return}
+      try{
+        const date=document.getElementById('wa-inbox-reminder-date').value;
+        await waOperatorRequest(waInboxBase()+'/recordatorios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:waInboxNumber,fecha_recordatorio:new Date(date).toISOString(),mensaje:document.getElementById('wa-inbox-reminder-text').value})});
+        e.currentTarget.reset();await waInboxReminders();
+      }catch(err){waInboxStatus.textContent=err.message}
+    };
+    document.getElementById('wa-inbox-save-contact').onclick=async()=>{
+      if(!waInboxSelectedContact)return;
+      try{
+        const payload={etiqueta:document.getElementById('wa-inbox-label').value,nota:document.getElementById('wa-inbox-note').value,archivado:document.getElementById('wa-inbox-archived').checked};
+        await waOperatorRequest(waInboxBase()+'/contactos/'+encodeURIComponent(waInboxSelectedContact.numero),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        waInboxStatus.textContent='Contacto guardado';
+      }catch(e){waInboxStatus.textContent=e.message}
+    };
     async function waInboxContacts(){
-      waInboxNumber='';document.getElementById('wa-inbox-title').textContent='';
+      waInboxNumber='';waInboxSelectedContact=null;document.getElementById('wa-inbox-contact-tools').hidden=true;document.getElementById('wa-inbox-title').textContent='';
       document.getElementById('wa-inbox-messages').replaceChildren();
       const box=document.getElementById('wa-inbox-contacts');box.replaceChildren();
       if(!waInboxTenant.value||!waInboxAccount.value)return;
@@ -3298,10 +3340,13 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         for(const c of contacts){
           const button=document.createElement('button');button.type='button';button.style.display='block';
           button.textContent=c.nombre||c.numero;button.onclick=async()=>{
-            waInboxNumber=c.numero;document.getElementById('wa-inbox-title').textContent=button.textContent;
+            waInboxNumber=c.numero;waInboxSelectedContact=c;document.getElementById('wa-inbox-contact-tools').hidden=false;
+            document.getElementById('wa-inbox-label').value=c.etiqueta||'nuevo';document.getElementById('wa-inbox-note').value=c.nota||'';document.getElementById('wa-inbox-archived').checked=!!c.archivado;
+            document.getElementById('wa-inbox-title').textContent=button.textContent;
             try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
           };box.appendChild(button);
         }
+        await waInboxReminders();
       }catch(e){waInboxStatus.textContent=e.message}
     }
     waInboxTenant.onchange=async()=>{try{await waInboxAccounts();await waInboxContacts()}catch(e){waInboxStatus.textContent=e.message}};
