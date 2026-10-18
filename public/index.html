@@ -1067,6 +1067,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list"></div>
 <p style="font-size:12px">Las cuentas nuevas usan sesiones independientes. La bandeja principal heredada aún no está aislada por empresa.</p>
 </section>
+    <section class="wa-dash-card" id="wa-tenant-inbox"><h3>Bandeja por empresa</h3><select id="wa-inbox-tenant"></select><select id="wa-inbox-account"></select><button id="wa-inbox-reload" type="button">Actualizar</button><div id="wa-inbox-contacts"></div><strong id="wa-inbox-title"></strong><div id="wa-inbox-messages"></div><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><p id="wa-inbox-status"></p></section>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
       <h3>Gestión de operadores</h3>
