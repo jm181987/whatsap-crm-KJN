@@ -878,6 +878,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #wa-ai-suggest{border-radius:8px;border:1px solid var(--wa-border);background:var(--wa-card);color:var(--wa-text);padding:8px;cursor:pointer}
 #wa-audit-refresh{background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:8px;cursor:pointer}
 .wa-audit-row{padding:9px 2px;border-top:1px solid var(--wa-border);font-size:12px;overflow-wrap:anywhere}
+#wa-operator-create input,#wa-operator-create select,#wa-operator-create button,#wa-operators-list button{padding:9px;background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px}#wa-operators-list .wa-audit-row{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
   </style>
 </head>
 <body>
@@ -1046,6 +1047,16 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <p id="wa-pipeline-error" role="status" style="color:var(--wa-muted);font-size:12px"></p>
     <section class="wa-dash-card" id="wa-followups"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3>Agenda de seguimientos</h3><button type="button" id="wa-followups-refresh">Actualizar</button></div><p id="wa-followups-status" role="status"></p><div id="wa-followups-list"></div></section>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
+    <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
+      <h3>Gestión de operadores</h3>
+      <form id="wa-operator-create" style="display:flex;flex-wrap:wrap;gap:8px">
+        <input name="usuario" placeholder="Usuario" minlength="3" maxlength="40" required autocomplete="off">
+        <input name="password" placeholder="Contraseña (12+ caracteres)" type="password" minlength="12" maxlength="128" required autocomplete="new-password">
+        <select name="rol"><option value="operador">Operador</option><option value="admin">Administrador</option></select>
+        <button type="submit">Crear operador</button>
+      </form>
+      <p id="wa-operators-status" role="status"></p><div id="wa-operators-list"></div>
+    </section>
     <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
     <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
     <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
@@ -3161,6 +3172,45 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     }
     document.getElementById('wa-audit-refresh').onclick=loadAuditActivity;
     document.getElementById('wa-nav-dash').addEventListener('click',loadAuditActivity);
+    async function waOperatorRequest(url,options){
+      const response=await fetch(url,{cache:'no-store',...options});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error||'Error de operadores');
+      return data;
+    }
+    async function waLoadOperators(){
+      const card=document.getElementById('wa-operators-card');
+      const status=document.getElementById('wa-operators-status');
+      try{
+        const me=await waOperatorRequest('/operadores/yo');
+        card.hidden=me.rol!=='admin';
+        if(me.rol!=='admin')return;
+        const rows=await waOperatorRequest('/operadores');
+        const list=document.getElementById('wa-operators-list');list.replaceChildren();
+        for(const operator of rows){
+          const row=document.createElement('div');row.className='wa-audit-row';
+          const name=document.createElement('strong');name.textContent=operator.usuario+' · '+operator.rol+' · '+(operator.activo?'Activo':'Inactivo');
+          const toggle=document.createElement('button');toggle.type='button';toggle.textContent=operator.activo?'Desactivar':'Activar';
+          toggle.onclick=async()=>{try{await waOperatorRequest('/operadores/'+operator.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({activo:!operator.activo})});await waLoadOperators()}catch(e){status.textContent=e.message}};
+          const reset=document.createElement('button');reset.type='button';reset.textContent='Cambiar contraseña';
+          reset.onclick=async()=>{const password=prompt('Nueva contraseña de al menos 12 caracteres');if(!password)return;try{await waOperatorRequest('/operadores/'+operator.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});status.textContent='Contraseña actualizada'}catch(e){status.textContent=e.message}};
+          const role=document.createElement('button');role.type='button';role.textContent='Cambiar rol';
+          role.onclick=async()=>{try{await waOperatorRequest('/operadores/'+operator.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({rol:operator.rol==='admin'?'operador':'admin'})});await waLoadOperators()}catch(e){status.textContent=e.message}};
+          row.append(name,document.createTextNode(' '),toggle,document.createTextNode(' '),reset,document.createTextNode(' '),role);list.appendChild(row);
+        }
+      }catch(e){status.textContent=e.message}
+    }
+    document.getElementById('wa-operator-create').addEventListener('submit',async e=>{
+      e.preventDefault();
+      const form=e.currentTarget;const values=new FormData(form);
+      const status=document.getElementById('wa-operators-status');
+      try{
+        await waOperatorRequest('/operadores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:values.get('usuario'),password:values.get('password'),rol:values.get('rol')})});
+        form.reset();await waLoadOperators();status.textContent='Operador creado';
+      }catch(err){status.textContent=err.message}
+    });
+    document.getElementById('wa-nav-dash').addEventListener('click',waLoadOperators);
+
 
 
     const waProfileForm=document.getElementById('wa-profile-form');
