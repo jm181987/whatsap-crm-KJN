@@ -1544,6 +1544,8 @@ app.get("/dashboard/seguimiento",async(req,res)=>{
   }catch(err){console.error("Error indicadores de seguimiento:",err);res.status(500).json({error:"No se pudieron calcular los indicadores"})}
 });
 
+app.get("/contactos/:numero/detalles",async(req,res)=>{try{const rows=await db.query("SELECT empresa,etiquetas FROM contacto_detalles WHERE numero=$1",[req.params.numero]);res.json(rows[0]||{empresa:"",etiquetas:""});}catch(e){res.status(500).json({error:"Error de ficha"})}});
+app.put("/contactos/:numero/detalles",async(req,res)=>{const empresa=String(req.body?.empresa||"").trim();const etiquetas=String(req.body?.etiquetas||"").trim();if(empresa.length>120||etiquetas.length>500)return res.status(400).json({error:"Campos demasiado largos"});try{const rows=await db.query("INSERT INTO contacto_detalles(numero,empresa,etiquetas) VALUES($1,$2,$3) ON CONFLICT(numero) DO UPDATE SET empresa=EXCLUDED.empresa,etiquetas=EXCLUDED.etiquetas,actualizado_en=NOW() RETURNING empresa,etiquetas",[req.params.numero,empresa,etiquetas]);res.json(rows[0]);}catch(e){res.status(500).json({error:"Error al guardar ficha"})}});
 // Cambiar estado
 app.put("/clientes/:numero/estado", (req, res) => {
   const { etiqueta, archivado } = req.body;
