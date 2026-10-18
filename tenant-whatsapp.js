@@ -41,7 +41,9 @@ export function createTenantWhatsApp(db) {
             const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
             item.status=loggedOut?"sesion_cerrada":"desconectado";
             if(loggedOut){
-             try{archiveInvalidSession(dir);item.status="reconectando";item.retry=setTimeout(connect,1500)}\n             catch(err){item.status="sesion_cerrada";console.error("Tenant session archive failed:",err)}\n           }
+             try{archiveInvalidSession(dir);item.status="reconectando";item.retry=setTimeout(connect,1500)}
+             catch(err){item.status="sesion_cerrada";console.error("Tenant session archive failed:",err)}
+           }
            if(!loggedOut&&!item.stopped)item.retry=setTimeout(connect,5000);
           }
         });
