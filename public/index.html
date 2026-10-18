@@ -3233,6 +3233,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       }catch{}
     }
     waInitAdmin();
+    document.getElementById('wa-nav-dash').addEventListener('click',()=>{
+      waAdminPanel.classList.remove('open');waAdminPanel.hidden=true;
+    });
+    for(const id of ['wa-nav-chats','wa-nav-kanban','wa-nav-contactos','wa-nav-pending']){
+      document.getElementById(id)?.addEventListener('click',()=>{
+        waAdminPanel.classList.remove('open');waAdminPanel.hidden=true;
+      });
+    }
     waAdminNav.addEventListener('click',async()=>{
       const me=await waOperatorRequest('/operadores/yo').catch(()=>null);
       if(me?.rol!=='admin')return;
