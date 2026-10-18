@@ -3195,8 +3195,9 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 
     async function waOperatorRequest(url,options){
       const response=await fetch(url,{cache:'no-store',...options});
-      const data=await response.json();
-      if(!response.ok)throw Error(data.error||'Error de operadores');
+      const raw=await response.text();
+      let data;try{data=JSON.parse(raw)}catch{throw Error(response.status===502?'Servidor no disponible (502). Revisá los logs de Coolify.':'Respuesta inválida del servidor (HTTP '+response.status+').')}
+      if(!response.ok)throw Error(data.error||'Error HTTP '+response.status);
       return data;
     }
     async function waLoadOperators(){
