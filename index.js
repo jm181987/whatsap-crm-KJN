@@ -350,7 +350,7 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/exportar",tenantAccess,async(req,
  try{
    const fields=cols[tipo];
    const rows=await db.query("SELECT "+fields.join(",")+" FROM "+tables[tipo]+" WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY "+(tipo==="contactos"?"numero":"1")+" LIMIT 50000",[req.tenantAccount.tenant_id,req.tenantAccount.id]);
-   const escape=v=>'"'+String(v??"").replace(/"/g,'""').replace(/^[=+@-]/,"'app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard"")+'"';
+   const escape=v=>'"'+String(v??"").replace(/"/g,'""').replace(/^[=+@-]/,match=>"'"+match)+'"';
    const csv="\uFEFF"+fields.join(",")+"\r\n"+rows.map(row=>fields.map(f=>escape(row[f])).join(",")).join("\r\n");
    res.set("Content-Type","text/csv; charset=utf-8");res.set("Content-Disposition",'attachment; filename="'+tipo+'-empresa-'+req.tenantAccount.tenant_id+'-cuenta-'+req.tenantAccount.id+'.csv"');res.send(csv);
  }catch(e){console.error("Tenant export:",e);res.status(500).json({error:"No se pudo exportar"})}
