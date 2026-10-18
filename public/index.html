@@ -866,6 +866,12 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #wa-smart-tools{display:flex;gap:8px;padding:9px 12px;flex-wrap:wrap;border-bottom:1px solid var(--wa-border)}
 #wa-smart-tools input,#wa-smart-tools select{min-width:0;flex:1 1 130px;background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:9px;padding:9px}
 #wa-workspace.wa-kanban-active #wa-smart-tools{flex-shrink:0}
+#wa-followups{margin:14px 0}
+.wa-followup-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 4px;border-top:1px solid var(--wa-border)}
+.wa-followup-row>div{display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere}
+.wa-followup-row small{color:var(--wa-muted)}
+.wa-followup-overdue{color:#f87171!important;font-weight:700}
+.wa-followup-row button,#wa-followups-refresh{background:var(--wa-card);border:1px solid var(--wa-border);color:var(--wa-text);padding:8px;border-radius:8px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -1030,6 +1036,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <div class="wa-metric"><span>Sin interacción hace más de 3 días</span><strong id="wa-pipeline-stale">—</strong></div>
     </div>
     <p id="wa-pipeline-error" role="status" style="color:var(--wa-muted);font-size:12px"></p>
+    <section class="wa-dash-card" id="wa-followups"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3>Agenda de seguimientos</h3><button type="button" id="wa-followups-refresh">Actualizar</button></div><p id="wa-followups-status" role="status"></p><div id="wa-followups-list"></div></section>
     <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
     <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
     <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
@@ -3069,6 +3076,45 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       }catch(e){document.getElementById('wa-pipeline-error').textContent='No se pudieron cargar los indicadores: '+e.message}
     }
     document.getElementById('wa-nav-dash').addEventListener('click',loadPipelineMetrics);
+    async function loadFollowups(){
+      const list=document.getElementById('wa-followups-list');
+      const status=document.getElementById('wa-followups-status');
+      status.textContent='Cargando seguimientos...';
+      list.replaceChildren();
+      try{
+        const response=await fetch('/seguimientos/pendientes',{cache:'no-store'});
+        const items=await response.json();
+        if(!response.ok)throw Error(items.error||'No se pudieron cargar');
+        const now=Date.now();
+        const overdue=items.filter(x=>Number.isFinite(Date.parse(x.fecha_recordatorio))&&Date.parse(x.fecha_recordatorio)<now).length;
+        status.textContent=items.length+' pendientes · '+overdue+' vencidos'+(items.length===100?' (mostrando primeros 100)':'');
+        for(const item of items){
+          const row=document.createElement('div');row.className='wa-followup-row';
+          const details=document.createElement('div');
+          const name=document.createElement('strong');name.textContent=item.nombre||item.numero;
+          const date=document.createElement('small');
+          const parsed=new Date(item.fecha_recordatorio);
+          date.textContent=Number.isNaN(parsed.getTime())?String(item.fecha_recordatorio):parsed.toLocaleString('es-UY');
+          if(!Number.isNaN(parsed.getTime())&&parsed.getTime()<now)date.classList.add('wa-followup-overdue');
+          const note=document.createElement('span');note.textContent=item.mensaje||'Seguimiento';
+          details.append(name,date,note);
+          const done=document.createElement('button');done.type='button';done.textContent='Completar';
+          done.onclick=async()=>{
+            done.disabled=true;
+            try{
+              const response=await fetch('/seguimientos/'+encodeURIComponent(item.id)+'/completar',{method:'POST'});
+              const result=await response.json();
+              if(!response.ok)throw Error(result.error||'Error');
+              await loadFollowups();
+            }catch(err){status.textContent=err.message;done.disabled=false}
+          };
+          row.append(details,done);list.appendChild(row);
+        }
+      }catch(err){status.textContent='Error: '+err.message}
+    }
+    document.getElementById('wa-followups-refresh').onclick=loadFollowups;
+    document.getElementById('wa-nav-dash').addEventListener('click',loadFollowups);
+
     const waPendingBadge=document.getElementById('wa-nav-pending');
     const waPendingCount=document.getElementById('wa-pending-count');
     const waPendingObserver=new MutationObserver(() => {
