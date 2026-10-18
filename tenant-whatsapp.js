@@ -25,6 +25,8 @@ export function createTenantWhatsApp(db) {
     instances.set(key,item);
     async function connect() {
       if(item.stopped)return;
+      clearTimeout(item.retry);item.retry=null;
+      item.status="iniciando";
       try {
         const dir=path.join(base,String(account.tenant_id),String(key));
         fs.mkdirSync(dir,{recursive:true});
@@ -42,7 +44,7 @@ export function createTenantWhatsApp(db) {
             const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
             item.status=loggedOut?"sesion_cerrada":"desconectado";
             if(loggedOut){
-             try{archiveInvalidSession(dir);item.status="reconectando";item.retry=setTimeout(connect,1500)}
+             try{archiveInvalidSession(dir);item.status="reconectando";if(!item.stopped)item.retry=setTimeout(connect,1500)}
              catch(err){item.status="sesion_cerrada";console.error("Tenant session archive failed:",err)}
            }
            if(!loggedOut&&!item.stopped)item.retry=setTimeout(connect,5000);
@@ -89,6 +91,7 @@ export function createTenantWhatsApp(db) {
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
               await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null]);
+              console.log("✅ Tenant mensaje persistido:",account.tenant_id,key,msg.key?.id,mediaPath?"multimedia":"texto");
             }catch(e){console.error("Tenant message persistence:",e)}
             }catch(e){console.error("Tenant incoming message error:",key,msg?.key?.id,e)}
           }
