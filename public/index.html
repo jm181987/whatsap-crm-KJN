@@ -3239,7 +3239,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         const response=await fetch('/operadores/yo',{cache:'no-store'});
         if(!response.ok)return;
         const me=await response.json();
-        waAdminNav.hidden=me.rol!=='admin';
+        waAdminNav.hidden=false;waAdminNav.title=me.rol==='admin'?'Administración y empresas':'Mis empresas y chats';
       }catch{}
     }
 
@@ -3390,13 +3390,16 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     }
     waAdminNav.addEventListener('click',async()=>{
       const me=await waOperatorRequest('/operadores/yo').catch(()=>null);
-      if(me?.rol!=='admin')return;
+      if(!me)return;
+      const isAdmin=me.rol==='admin';
+      document.getElementById('wa-tenants-card').hidden=!isAdmin;
+      document.getElementById('wa-audit-card').hidden=!isAdmin;
+      document.getElementById('wa-operators-card').hidden=!isAdmin;
       document.getElementById('wa-dashboard').classList.remove('open');
       waAdminPanel.hidden=false;
       waAdminPanel.classList.add('open');
-      loadAuditActivity();
-      waLoadOperators();
-      waLoadTenants();
+      waInboxTenants().catch(e=>waInboxStatus.textContent=e.message);
+      if(isAdmin){loadAuditActivity();waLoadOperators();waLoadTenants()}
     });
     document.getElementById('wa-admin-close').onclick=()=>{waAdminPanel.classList.remove('open');waAdminPanel.hidden=true};
 
