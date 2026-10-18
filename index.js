@@ -204,6 +204,27 @@ app.delete("/admin/tenants/:id/asignaciones/:cuenta/:usuario",requireAdmin,async
   try{await db.query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND usuario=$3",[req.params.id,req.params.cuenta,req.params.usuario]);res.json({ok:true})}
   catch(e){res.status(500).json({error:"Error quitando asignación"})}
 });
+app.get("/mis-empresas",async(req,res)=>{
+  try{
+    if(req.crmActor===crmUser)return res.json(await db.query("SELECT id,nombre,modo_acceso FROM crm_tenants WHERE activo=TRUE ORDER BY nombre"));
+    res.json(await db.query("SELECT t.id,t.nombre,t.modo_acceso FROM crm_tenants t JOIN crm_tenant_miembros m ON m.tenant_id=t.id WHERE m.usuario=$1 AND m.activo=TRUE AND t.activo=TRUE ORDER BY t.nombre",[req.crmActor]));
+  }catch(e){res.status(500).json({error:"No se pudieron cargar las empresas"})}
+});
+app.get("/mis-empresas/:id/cuentas",async(req,res)=>{
+  try{
+    const id=Number(req.params.id);
+    if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:"Empresa inválida"});
+    if(req.crmActor===crmUser)return res.json(await db.query("SELECT c.id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id WHERE c.tenant_id=$1 AND t.activo=TRUE ORDER BY c.nombre",[id]));
+    res.json(await db.query("SELECT c.id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id JOIN crm_tenant_miembros m ON m.tenant_id=t.id AND m.usuario=$2 AND m.activo=TRUE WHERE c.tenant_id=$1 AND t.activo=TRUE AND (m.rol='admin' OR t.modo_acceso='compartido' OR EXISTS(SELECT 1 FROM crm_whatsapp_asignaciones a WHERE a.tenant_id=t.id AND a.cuenta_id=c.id AND a.usuario=$2)) ORDER BY c.nombre",[id,req.crmActor]));
+  }catch(e){res.status(500).json({error:"No se pudieron cargar los WhatsApp"})}
+});
+app.delete("/admin/tenants/:id/miembros/:usuario",requireAdmin,async(req,res)=>{
+  try{
+    await db.query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1 AND usuario=$2",[req.params.id,req.params.usuario]);
+    await db.query("UPDATE crm_tenant_miembros SET activo=FALSE WHERE tenant_id=$1 AND usuario=$2",[req.params.id,req.params.usuario]);
+    res.json({ok:true});
+  }catch(e){res.status(500).json({error:"No se pudo revocar el acceso"})}
+});
 const tenantWA=createTenantWhatsApp(db);
 async function tenantAccess(req,res,next){
   const tenant=Number(req.params.tenantId),cuenta=Number(req.params.cuentaId);
