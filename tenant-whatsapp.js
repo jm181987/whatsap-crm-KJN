@@ -5,7 +5,7 @@ import qrcode from "qrcode";
 
 export function createTenantWhatsApp(db) {
   const instances = new Map();
-  const base = path.resolve(process.env.SESSION_DIR || "session") + "-tenants";
+  const base = path.join(path.resolve(process.env.SESSION_DIR || "session"), "tenants");
   async function start(account) {
     const key = Number(account.id);
     if (instances.has(key)) return instances.get(key).status;
