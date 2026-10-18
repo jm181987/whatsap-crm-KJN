@@ -51,6 +51,7 @@ async function verifyPassword(password,stored){
 }
 const sessionCookieName="knj_crm_session";
 const digestSession=token=>createHash("sha256").update(token).digest("hex");
+app.use((req,res,next)=>{if(/^\/tenants\/\d+\/whatsapp\/\d+\/enviar-media$/.test(req.path))return express.json({limit:"12mb"})(req,res,next);next()});
 app.use(express.json({limit:"1mb"}));
 app.use((req,res,next)=>{
   if(!["POST","PUT","PATCH","DELETE"].includes(req.method))return next();
