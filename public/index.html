@@ -2992,9 +2992,15 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     document.getElementById('wa-days').onchange = waRefreshReport;
     async function waRefreshReport(silent=false) {
       try {
-        const response = await fetch('/api/informes/conversaciones?dias=' + encodeURIComponent(document.getElementById('wa-days').value));
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const data = await response.json();
+        const scoped=waInboxTenant?.value&&waInboxAccount?.value;
+        const reportPath=scoped?waInboxBase()+'/informes/conversaciones':'/api/informes/conversaciones';
+        const response = await fetch(reportPath+'?dias='+encodeURIComponent(document.getElementById('wa-days').value),{headers:{Accept:'application/json'},cache:'no-store'});
+        const raw=await response.text();
+        let data;
+        try{data=JSON.parse(raw)}catch{
+          throw new Error('El servidor devolvió HTML en vez de JSON (HTTP '+response.status+'). Revisá la ruta, autenticación y despliegue en Coolify.');
+        }
+        if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
         const pending = data.pending || [];
         document.getElementById('wa-pending-count').textContent = pending.length;
         if (pending.length > 0 && waLastPending === 0 && Notification.permission === 'granted') {
