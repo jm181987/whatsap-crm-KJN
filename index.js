@@ -172,9 +172,27 @@ app.post("/admin/tenants",requireAdmin,async(req,res)=>{
 });
 app.patch("/admin/tenants/:id",requireAdmin,async(req,res)=>{
   const modo=req.body?.modo_acceso;
-  if(!["compartido","restringido"].includes(modo))return res.status(400).json({error:"Modo inválido"});
-  try{const rows=await db.query("UPDATE crm_tenants SET modo_acceso=$2 WHERE id=$1 RETURNING id,nombre,modo_acceso",[req.params.id,modo]);res.json(rows[0]||null)}
+  const nombre=req.body?.nombre===undefined?undefined:String(req.body.nombre).trim();
+  if(modo!==undefined&&!["compartido","restringido"].includes(modo))return res.status(400).json({error:"Modo inválido"});
+  if(nombre!==undefined&&(nombre.length<2||nombre.length>120))return res.status(400).json({error:"Nombre inválido"});
+  if(modo===undefined&&nombre===undefined)return res.status(400).json({error:"Sin cambios"});
+  try{const rows=await db.query("UPDATE crm_tenants SET modo_acceso=COALESCE($2,modo_acceso),nombre=COALESCE($3,nombre) WHERE id=$1 RETURNING id,nombre,modo_acceso,activo",[req.params.id,modo??null,nombre??null]);if(!rows.length)return res.status(404).json({error:"Empresa inexistente"});res.json(rows[0])}
   catch(e){res.status(500).json({error:"Error actualizando empresa"})}
+});
+app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:"Empresa inválida"});
+  try{
+    const rows=await db.query("SELECT id,nombre FROM crm_tenants WHERE id=$1",[id]);
+    if(!rows.length)return res.status(404).json({error:"Empresa inexistente"});
+    const counts=await db.query("SELECT (SELECT COUNT(*) FROM crm_whatsapp_cuentas WHERE tenant_id=$1)::int AS cuentas,(SELECT COUNT(*) FROM crm_tenant_mensajes WHERE tenant_id=$1)::int AS mensajes",[id]);
+    if(counts[0].cuentas>0||counts[0].mensajes>0)return res.status(409).json({error:"La empresa tiene cuentas o conversaciones. Eliminá o migrá sus datos antes de borrarla; no se eliminarán chats automáticamente."});
+    await db.query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1",[id]);
+    await db.query("DELETE FROM crm_tenant_miembros WHERE tenant_id=$1",[id]);
+    await db.query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
+    await db.query("DELETE FROM crm_tenants WHERE id=$1",[id]);
+    res.json({ok:true});
+  }catch(e){console.error("Deleting tenant:",e);res.status(500).json({error:"No se pudo eliminar la empresa"})}
 });
 app.get("/admin/tenants/:id/cuentas",requireAdmin,async(req,res)=>{
   try{res.json(await db.query("SELECT id,nombre,estado FROM crm_whatsapp_cuentas WHERE tenant_id=$1 ORDER BY id",[req.params.id]))}
