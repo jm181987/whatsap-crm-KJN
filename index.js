@@ -86,6 +86,15 @@ app.use(async(req,res,next)=>{
     }catch{}
   }
   try{
+    const token=(req.headers.cookie||"").split(";").map(x=>x.trim()).find(x=>x.startsWith(sessionCookieName+"="))?.slice(sessionCookieName.length+1);
+    if(token){
+      const rows=await db.query("SELECT s.usuario,o.rol,o.activo FROM crm_sesiones s LEFT JOIN crm_operadores o ON o.usuario=s.usuario WHERE s.token_hash=$1 AND s.vence>NOW()",[digestSession(token)]);
+      if(rows.length&&(rows[0].usuario===crmUser||rows[0].activo===true)){
+        req.crmActor=rows[0].usuario;
+        req.crmRole=rows[0].usuario===crmUser?"admin":rows[0].rol;
+        return next();
+      }
+    }
     if(secureEqual(username,crmUser)&&secureEqual(password,crmPassword)){
       req.crmActor=crmUser;req.crmRole="admin";return next();
     }
