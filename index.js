@@ -681,7 +681,7 @@ async function iniciarWhatsApp() {
             for(const entry of fs.readdirSync(sessionDir,{withFileTypes:true})){
               // Never touch tenant credentials or prior backups.
               if(!entry.isFile())continue;
-              if(entry.name==="creds.json"||entry.name.endsWith(".json")&&/^(?:app-state-sync-key|app-state-sync-version|pre-key|session|sender-key)-/.test(entry.name)){
+              if(entry.name==="creds.json"||entry.name.endsWith(".json")&&/^(?:app-state-sync-key|app-state-sync-version|pre-key|session|sender-key|sender-key-memory|lid-mapping|device-list|tctoken)-/.test(entry.name)){
                 fs.renameSync(path.join(sessionDir,entry.name),path.join(archiveDir,entry.name));
               }
             }
