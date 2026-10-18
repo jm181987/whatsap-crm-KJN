@@ -782,7 +782,10 @@ async function iniciarWhatsApp() {
     });
 
     sock=socket;
-    socket.ev.on("creds.update", saveCreds);
+    socket.ev.on("creds.update", async()=>{
+      if(generation!==mainWaGeneration || sock!==socket)return;
+      try{await saveCreds()}catch(err){console.error("No se pudieron guardar las claves de WhatsApp principal:",err)}
+    });
 
     socket.ev.on("connection.update", async (update) => {
       if(generation!==mainWaGeneration || sock!==socket)return;
@@ -828,7 +831,6 @@ async function iniciarWhatsApp() {
               }
             }
             console.log("🔐 Credenciales principales archivadas; preparando nuevo QR.");
-            sock=null;
             scheduleMainWhatsAppRetry(1500);
           }catch(err){console.error("No se pudieron archivar las credenciales de la sesión principal:",err)}
 
