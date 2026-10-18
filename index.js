@@ -1832,18 +1832,20 @@ app.get("/api/informes/conversaciones", async (req, res) => {
       WHERE LEFT(fecha, 10) >= TO_CHAR(CURRENT_DATE - ($1::int - 1), 'YYYY-MM-DD')
       GROUP BY LEFT(fecha, 10) ORDER BY dia DESC`, [days]);
     // Match the latest stored message by id; avoid casting old text dates to timestamps.
-    const pending = await db.query(`
+    const pendingRows = await db.query(`
       SELECT m.numero, COALESCE(NULLIF(c.nombre, ''), m.numero) AS nombre,
-             m.fecha AS ultima_fecha, m.mensaje AS ultimo_mensaje,
-             CASE WHEN m.fecha ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
-               THEN GREATEST(0, EXTRACT(EPOCH FROM (NOW() - NULLIF(m.fecha, '')::timestamptz))::int)
-               ELSE NULL END AS espera_segundos
+             m.fecha AS ultima_fecha, m.mensaje AS ultimo_mensaje
       FROM mensajes m
       LEFT JOIN clientes c ON c.numero = m.numero
       WHERE m.tipo = 'recibido'
         AND m.id = (SELECT ultimo.id FROM mensajes ultimo
                     WHERE ultimo.numero = m.numero ORDER BY ultimo.id DESC LIMIT 1)
       ORDER BY m.id DESC LIMIT 200`);
+    const pending = pendingRows.map(row => {
+      const timestamp = Date.parse(row.ultima_fecha || "");
+      return {...row, espera_segundos: Number.isFinite(timestamp)
+        ? Math.max(0, Math.floor((Date.now() - timestamp) / 1000)) : null};
+    });
     res.setHeader('Cache-Control', 'no-store');
     res.json({ daily, pending, llamadas: { duracion_segundos: null, disponible: false,
       motivo: 'La integración actual no registra duración de llamadas.' } });
