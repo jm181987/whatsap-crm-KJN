@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
+import { randomUUID } from "node:crypto";
 
 export function createTenantWhatsApp(db) {
   const instances = new Map();
@@ -55,9 +56,25 @@ export function createTenantWhatsApp(db) {
             const content=msg.message.ephemeralMessage?.message||msg.message.viewOnceMessageV2?.message||msg.message.viewOnceMessage?.message||msg.message;
             const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":"");
             if(!texto)continue;
+            let mediaPath=null,mediaMime=null,mediaNombre=null;
+            const media=content.imageMessage||content.videoMessage||content.audioMessage||content.documentMessage;
+            if(media){
+              const kind=content.imageMessage?"image":content.videoMessage?"video":content.audioMessage?"audio":"document";
+              mediaMime=String(media.mimetype||"application/octet-stream").split(";")[0];
+              mediaNombre=String(media.fileName||kind).slice(0,150);
+              try{
+                const buffer=await downloadMediaMessage(msg,"buffer",{}, {logger:console,reuploadRequest:socket.updateMediaMessage});
+                if(buffer?.length&&buffer.length<=30*1024*1024){
+                  const mediaDir=path.join(base,String(account.tenant_id),String(key),"media");
+                  fs.mkdirSync(mediaDir,{recursive:true,mode:0o700});
+                  mediaPath=randomUUID();
+                  fs.writeFileSync(path.join(mediaDir,mediaPath),buffer,{mode:0o600});
+                }else console.warn("Tenant media omitted: empty or exceeds 30MB",key);
+              }catch(err){console.error("Tenant media download failed:",key,err)}
+            }
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
-              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,$5)",[account.tenant_id,key,numero,texto,"recibido"]);
+              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null]);
             }catch(e){console.error("Tenant message persistence:",e)}
           }
         });
