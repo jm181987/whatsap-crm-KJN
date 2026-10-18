@@ -3565,7 +3565,16 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
             };
             connect.onclick=()=>refresh(true);
             const check=document.createElement('button');check.type='button';check.textContent='Actualizar estado';check.onclick=()=>refresh(false);
-            row.append(label,state,connect,check,qr);accounts.appendChild(row);refresh();
+            const reset=document.createElement('button');reset.type='button';reset.textContent='Restablecer sesión';
+            reset.onclick=async()=>{
+              const confirmacion=prompt('Esto desvincula la sesión guardada de '+account.nombre+' y requiere escanear un QR nuevo. Escribí RESTABLECER:');
+              if(confirmacion!=='RESTABLECER')return;
+              try{
+                await waOperatorRequest('/tenants/'+tenant.id+'/whatsapp/'+account.id+'/restablecer-sesion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmacion})});
+                await refresh(false);
+              }catch(e){state.textContent=e.message}
+            };
+            row.append(label,state,connect,check,reset,qr);accounts.appendChild(row);refresh();
           }
         }
       }catch(e){status.textContent=e.message}
