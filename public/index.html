@@ -1096,6 +1096,12 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 </div>
 <div id="wa-inbox-messages"></div>
 <section id="wa-inbox-analytics" style="margin:12px 0"><h4>Indicadores de esta cuenta</h4><div id="wa-inbox-kpis"></div><div id="wa-inbox-kanban"></div></section>
+<details id="wa-inbox-quick-replies"><summary>Respuestas rápidas</summary>
+<form id="wa-inbox-quick-form"><input id="wa-inbox-quick-title" placeholder="Título" maxlength="100" required><textarea id="wa-inbox-quick-text" placeholder="Mensaje" maxlength="4096" required></textarea><button>Guardar respuesta</button></form>
+<div id="wa-inbox-quick-list"></div></details>
+<details id="wa-inbox-exports"><summary>Exportar datos de esta cuenta</summary>
+<button type="button" data-tenant-export="contactos">Contactos CSV</button><button type="button" data-tenant-export="mensajes">Mensajes CSV</button><button type="button" data-tenant-export="seguimientos">Seguimientos CSV</button><button type="button" data-tenant-export="recordatorios">Recordatorios CSV</button>
+</details>
 <details id="wa-inbox-followups"><summary>Seguimientos de esta cuenta</summary>
 <form id="wa-inbox-followup-form"><input id="wa-inbox-followup-text" maxlength="2000" required placeholder="Nuevo seguimiento para el contacto seleccionado"><button>Agregar</button></form>
 <div id="wa-inbox-followup-list"></div></details>
@@ -3303,6 +3309,36 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         box.appendChild(line);
       }
     }
+    async function waInboxQuickReplies(){
+      const list=document.getElementById('wa-inbox-quick-list');list.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const items=await waOperatorRequest(waInboxBase()+'/respuestas');
+      for(const item of items){
+        const row=document.createElement('div');
+        const use=document.createElement('button');use.type='button';use.textContent='Usar: '+item.titulo;
+        use.onclick=()=>{document.getElementById('wa-inbox-text').value=item.texto;document.getElementById('wa-inbox-text').focus()};
+        const del=document.createElement('button');del.type='button';del.textContent='Eliminar';
+        del.onclick=async()=>{if(!confirm('¿Eliminar respuesta?'))return;try{await waOperatorRequest(waInboxBase()+'/respuestas/'+item.id,{method:'DELETE'});await waInboxQuickReplies()}catch(e){waInboxStatus.textContent=e.message}};
+        row.append(use,del);list.append(row);
+      }
+    }
+    document.getElementById('wa-inbox-quick-form').onsubmit=async e=>{
+      e.preventDefault();
+      if(!waInboxAccount.value)return;
+      try{await waOperatorRequest(waInboxBase()+'/respuestas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titulo:document.getElementById('wa-inbox-quick-title').value,texto:document.getElementById('wa-inbox-quick-text').value})});e.currentTarget.reset();await waInboxQuickReplies()}
+      catch(err){waInboxStatus.textContent=err.message}
+    };
+    document.querySelectorAll('[data-tenant-export]').forEach(button=>button.onclick=async()=>{
+      if(!waInboxAccount.value){waInboxStatus.textContent='Seleccioná una cuenta';return}
+      const url=waInboxBase()+'/exportar?tipo='+encodeURIComponent(button.dataset.tenantExport);
+      try{
+        const response=await fetch(url);
+        if(!response.ok)throw Error((await response.json()).error||'Error al exportar');
+        const blob=await response.blob(),href=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=href;a.download=button.dataset.tenantExport+'-empresa-'+waInboxTenant.value+'-cuenta-'+waInboxAccount.value+'.csv';a.click();
+        setTimeout(()=>URL.revokeObjectURL(href),10000);
+      }catch(e){waInboxStatus.textContent=e.message}
+    });
     async function waInboxDashboard(){
       const kpis=document.getElementById('wa-inbox-kpis'),kanban=document.getElementById('wa-inbox-kanban');
       kpis.replaceChildren();kanban.replaceChildren();
@@ -3386,7 +3422,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
             try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
           };box.appendChild(button);
         }
-        await Promise.all([waInboxReminders(),waInboxFollowups(),waInboxDashboard()]);
+        await Promise.all([waInboxReminders(),waInboxFollowups(),waInboxDashboard(),waInboxQuickReplies()]);
       }catch(e){waInboxStatus.textContent=e.message}
     }
     waInboxTenant.onchange=async()=>{try{await waInboxAccounts();await waInboxContacts()}catch(e){waInboxStatus.textContent=e.message}};
