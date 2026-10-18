@@ -1078,6 +1078,18 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-tenant-details select{max-width:100%;margin:8px 0}
 #wa-tenant-inbox select{max-width:100%;margin:4px 8px 8px 0}
 @media(max-width:600px){.wa-tenant-card{padding:12px}.wa-tenant-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Professional tenant inbox: no shared chat state, only tenant-scoped IDs */
+#wa-tenant-inbox{max-width:none!important;padding:0!important;overflow:hidden;border:1px solid var(--wa-border);border-radius:16px}
+.wa-company-heading,.wa-company-switcher{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;border-bottom:1px solid var(--wa-border)}
+.wa-company-heading h3{margin:0;font-size:21px}.wa-company-heading p{margin:5px 0 0;color:var(--wa-muted);font-size:13px}.wa-company-tag{font-size:12px;border:1px solid var(--wa-border);border-radius:30px;padding:7px 12px;white-space:nowrap}
+.wa-company-switcher{justify-content:flex-start;flex-wrap:wrap;background:var(--wa-panel)}.wa-company-switcher label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;min-width:190px}.wa-company-switcher select{width:100%;margin:0!important;min-height:38px}
+.wa-company-layout{display:grid;grid-template-columns:minmax(210px,26%) minmax(0,1fr) minmax(220px,27%);height:min(68vh,710px);min-height:430px}
+.wa-company-sidebar,.wa-company-main,.wa-company-tools{min-width:0;min-height:0}.wa-company-sidebar{border-right:1px solid var(--wa-border);display:flex;flex-direction:column}.wa-company-sidebar-head{padding:15px;border-bottom:1px solid var(--wa-border);display:grid;gap:9px}.wa-company-sidebar-head input{width:100%;box-sizing:border-box}.wa-company-sidebar #wa-inbox-contacts{overflow-y:auto;flex:1;padding:6px}.wa-company-sidebar #wa-inbox-contacts button{width:100%;text-align:left;padding:13px 12px;margin:3px 0;border-radius:10px;white-space:normal;overflow-wrap:anywhere;border:1px solid transparent;background:transparent;color:var(--wa-text);cursor:pointer}.wa-company-sidebar #wa-inbox-contacts button:hover,.wa-company-sidebar #wa-inbox-contacts button.wa-inbox-selected{background:var(--wa-hover,var(--wa-panel));border-color:var(--wa-border)}
+.wa-company-main{display:flex;flex-direction:column}.wa-company-chat-head{padding:17px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--wa-border)}.wa-company-avatar{display:grid;place-items:center;border-radius:50%;width:36px;height:36px;background:var(--wa-panel)}#wa-inbox-messages{flex:1;overflow-y:auto;padding:20px;background:var(--wa-bg,var(--wa-panel));display:flex;flex-direction:column;gap:9px}#wa-inbox-messages p{margin:0;max-width:82%;padding:10px 14px;border-radius:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--wa-panel);border:1px solid var(--wa-border);align-self:flex-start}#wa-inbox-messages p.wa-outgoing{align-self:flex-end;background:rgba(37,164,113,.13);border-color:rgba(37,164,113,.2)}
+.wa-company-tools{border-left:1px solid var(--wa-border);overflow-y:auto;padding:14px;display:grid;align-content:start;gap:10px}.wa-company-tools details,.wa-company-tools #wa-inbox-contact-tools,.wa-company-tools #wa-inbox-analytics{padding:12px;border:1px solid var(--wa-border);border-radius:12px;margin:0!important}.wa-company-tools details summary{cursor:pointer;font-weight:600}.wa-company-tools textarea,.wa-company-tools input:not([type=checkbox]),.wa-company-tools select{max-width:100%;box-sizing:border-box}.wa-company-tools label{display:block;margin:9px 0}.wa-company-composer{padding:14px 18px;border-top:1px solid var(--wa-border)}.wa-company-composer #wa-inbox-send{display:flex;gap:9px}.wa-company-composer #wa-inbox-text{flex:1;min-width:0}.wa-company-composer #wa-inbox-media-form{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:10px}#wa-inbox-status{font-size:12px;color:var(--wa-muted)}
+@media(max-width:1050px){.wa-company-layout{grid-template-columns:minmax(180px,32%) minmax(0,1fr);height:65vh}.wa-company-tools{grid-column:1/-1;border-left:0;border-top:1px solid var(--wa-border);max-height:300px}.wa-company-layout{height:auto}.wa-company-sidebar,.wa-company-main{height:490px}}
+@media(max-width:650px){.wa-company-heading,.wa-company-switcher{padding:12px}.wa-company-tag{display:none}.wa-company-layout{display:block}.wa-company-sidebar{height:185px;border-right:0;border-bottom:1px solid var(--wa-border)}.wa-company-main{height:420px}.wa-company-tools{max-height:none}.wa-company-switcher label{min-width:0;flex:1 1 130px}.wa-company-composer{padding:12px}}
 </style>
 <section id="wa-admin-panel" aria-label="Administración" hidden>
     <div class="wa-dash-head"><div><h2 id="wa-admin-title">Administración</h2><p id="wa-admin-description">Empresas, operadores y actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
@@ -1087,15 +1099,15 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list" class="wa-tenant-grid"></div>
 <p style="font-size:12px;color:var(--wa-muted)">Cada empresa tiene su propia conexión y sus chats se consultan en <strong>Bandeja por empresa</strong>, seleccionando la empresa y el número de WhatsApp. La bandeja principal muestra únicamente la conexión original; no combina conversaciones de las otras empresas.</p>
 </section>
-    <section class="wa-dash-card" id="wa-tenant-inbox"><h3>Bandeja por empresa</h3><select id="wa-inbox-tenant"></select><select id="wa-inbox-account"></select><button id="wa-inbox-reload" type="button">Actualizar</button><div id="wa-inbox-contacts"></div><strong id="wa-inbox-title"></strong>
+    <section class="wa-dash-card" id="wa-tenant-inbox"><div class="wa-company-heading"><div><h3>Bandeja de conversaciones</h3><p>Atención de WhatsApp por empresa, con historial y herramientas independientes.</p></div><span class="wa-company-tag">CRM · Empresas</span></div><div class="wa-company-switcher"><label>Empresa<select id="wa-inbox-tenant"></select></label><label>Cuenta de WhatsApp<select id="wa-inbox-account"></select></label><button id="wa-inbox-reload" type="button">↻ Actualizar</button></div><div class="wa-company-layout"><aside class="wa-company-sidebar"><div class="wa-company-sidebar-head"><strong>Conversaciones</strong><input id="wa-inbox-search" type="search" placeholder="Buscar contacto…" aria-label="Buscar conversaciones"></div><div id="wa-inbox-contacts"></div></aside><div class="wa-company-main"><div class="wa-company-chat-head"><span class="wa-company-avatar">✦</span><strong id="wa-inbox-title">Seleccioná una conversación</strong></div>
 <div id="wa-inbox-contact-tools" hidden>
 <label>Estado <select id="wa-inbox-label"><option value="nuevo">Nuevo</option><option value="callback">Callback</option><option value="analista">Analista</option><option value="cerrado">Cerrado</option></select></label>
 <label>Nota <textarea id="wa-inbox-note" rows="2" placeholder="Notas internas de este contacto"></textarea></label>
 <label><input type="checkbox" id="wa-inbox-archived"> Archivado</label>
 <button type="button" id="wa-inbox-save-contact">Guardar contacto</button>
 </div>
-<div id="wa-inbox-messages"></div>
-<section id="wa-inbox-analytics" style="margin:12px 0"><h4>Indicadores de esta cuenta</h4><div id="wa-inbox-kpis"></div><div id="wa-inbox-kanban"></div></section>
+<div id="wa-inbox-messages" role="log" aria-live="polite"></div>
+</div><aside class="wa-company-tools"><section id="wa-inbox-analytics" style="margin:12px 0"><h4>Indicadores de esta cuenta</h4><div id="wa-inbox-kpis"></div><div id="wa-inbox-kanban"></div></section>
 <details id="wa-inbox-quick-replies"><summary>Respuestas rápidas</summary>
 <form id="wa-inbox-quick-form"><input id="wa-inbox-quick-title" placeholder="Título" maxlength="100" required><textarea id="wa-inbox-quick-text" placeholder="Mensaje" maxlength="4096" required></textarea><button>Guardar respuesta</button></form>
 <div id="wa-inbox-quick-list"></div></details>
@@ -1108,7 +1120,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <details id="wa-inbox-reminders"><summary>Recordatorios de esta cuenta</summary>
 <form id="wa-inbox-reminder-form"><input id="wa-inbox-reminder-date" type="datetime-local" required><input id="wa-inbox-reminder-text" placeholder="Recordatorio" maxlength="2000"><button>Agregar</button></form>
 <div id="wa-inbox-reminder-list"></div>
-</details><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><form id="wa-inbox-media-form"><label>Enviar archivo al contacto seleccionado <input id="wa-inbox-media-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,audio/ogg,audio/mpeg,audio/mp4,application/pdf,text/plain,.docx" required></label><input id="wa-inbox-media-caption" placeholder="Texto opcional" maxlength="1024"><button>Enviar archivo</button></form><p id="wa-inbox-status"></p></section>
+</details></aside></div><div class="wa-company-composer"><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><form id="wa-inbox-media-form"><label>Enviar archivo al contacto seleccionado <input id="wa-inbox-media-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,audio/ogg,audio/mpeg,audio/mp4,application/pdf,text/plain,.docx" required></label><input id="wa-inbox-media-caption" placeholder="Texto opcional" maxlength="1024"><button>Enviar archivo</button></form><p id="wa-inbox-status" role="status"></p></div></section>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
       <h3>Gestión de operadores</h3>
@@ -3444,9 +3456,9 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       try{
         const contacts=await waOperatorRequest(waInboxBase()+'/contactos');
         for(const c of contacts){
-          const button=document.createElement('button');button.type='button';button.style.display='block';
+          const button=document.createElement('button');button.type='button';button.dataset.contactSearch=(c.nombre||'')+' '+c.numero;
           button.textContent=c.nombre||c.numero;button.onclick=async()=>{
-            waInboxNumber=c.numero;waInboxSelectedContact=c;document.getElementById('wa-inbox-contact-tools').hidden=false;
+            box.querySelectorAll('button').forEach(b=>b.classList.remove('wa-inbox-selected'));button.classList.add('wa-inbox-selected');waInboxNumber=c.numero;waInboxSelectedContact=c;document.getElementById('wa-inbox-contact-tools').hidden=false;
             document.getElementById('wa-inbox-label').value=c.etiqueta||'nuevo';document.getElementById('wa-inbox-note').value=c.nota||'';document.getElementById('wa-inbox-archived').checked=!!c.archivado;
             document.getElementById('wa-inbox-title').textContent=button.textContent;
             try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
@@ -3455,6 +3467,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         await Promise.all([waInboxReminders(),waInboxFollowups(),waInboxDashboard(),waInboxQuickReplies()]);
       }catch(e){waInboxStatus.textContent=e.message}
     }
+    document.getElementById('wa-inbox-search').oninput=e=>{const query=e.target.value.trim().toLocaleLowerCase();document.querySelectorAll('#wa-inbox-contacts button').forEach(b=>b.hidden=!b.dataset.contactSearch.toLocaleLowerCase().includes(query))};
     waInboxTenant.onchange=async()=>{try{await waInboxAccounts();await waInboxContacts()}catch(e){waInboxStatus.textContent=e.message}};
     waInboxAccount.onchange=waInboxContacts;
     document.getElementById('wa-inbox-reload').onclick=waInboxContacts;
