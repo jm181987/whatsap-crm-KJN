@@ -872,6 +872,8 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-followup-row small{color:var(--wa-muted)}
 .wa-followup-overdue{color:#f87171!important;font-weight:700}
 .wa-followup-row button,#wa-followups-refresh{background:var(--wa-card);border:1px solid var(--wa-border);color:var(--wa-text);padding:8px;border-radius:8px;cursor:pointer}
+#wa-profile-form input{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:9px}
+#wa-profile-form button{background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:9px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -1018,6 +1020,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <div id="wa-contact-name">Contacto</div><div id="wa-contact-number"></div>
     <div class="wa-detail-section"><h4>Seguimiento</h4><p id="wa-contact-status">Seleccioná una conversación para consultar su estado.</p>
       <button type="button" id="wa-contact-open">Ir a la conversación</button></div>
+    <div class="wa-detail-section"><h4>Perfil comercial</h4><form id="wa-profile-form" style="display:grid;gap:9px"><label>Empresa<input id="wa-profile-company" maxlength="120" autocomplete="organization"></label><label>Etiquetas (separadas por coma)<input id="wa-profile-tags" maxlength="500" placeholder="Interesado, VIP"></label><button type="submit">Guardar perfil</button><small id="wa-profile-status" role="status"></small></form></div>
     <div class="wa-detail-section"><h4>Notas y recordatorios</h4><p>Usá las opciones del chat para editar notas y programar seguimientos.</p></div>
   </aside>
   <section id="wa-dashboard" aria-label="Panel de actividad">
@@ -1402,6 +1405,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     async function abrirChat(cliente) {
       if(document.getElementById('wa-workspace').classList.contains('wa-kanban-active'))setKanbanMode(false);
       clienteActual = cliente;
+      waLoadProfile(cliente.numero);
       document.getElementById('chat').style.display = 'flex';
       document.getElementById('chat-header').textContent = `${cliente.nombre || cliente.numero}`;
       await cargarMensajes(cliente.numero);
@@ -3115,6 +3119,33 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     document.getElementById('wa-followups-refresh').onclick=loadFollowups;
     document.getElementById('wa-nav-dash').addEventListener('click',loadFollowups);
 
+    const waProfileForm=document.getElementById('wa-profile-form');
+    async function waLoadProfile(numero){
+      waProfileForm.dataset.numero=numero;
+      document.getElementById('wa-profile-status').textContent='';
+      document.getElementById('wa-profile-company').value='';
+      document.getElementById('wa-profile-tags').value='';
+      try{
+        const response=await fetch('/contactos/'+encodeURIComponent(numero)+'/detalles',{cache:'no-store'});
+        if(!response.ok)throw Error('No se pudo cargar el perfil');
+        const data=await response.json();
+        if(waProfileForm.dataset.numero!==numero)return;
+        document.getElementById('wa-profile-company').value=data.empresa||'';
+        document.getElementById('wa-profile-tags').value=data.etiquetas||'';
+      }catch(err){document.getElementById('wa-profile-status').textContent=err.message}
+    }
+    waProfileForm.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const numero=waProfileForm.dataset.numero;
+      if(!numero)return;
+      const status=document.getElementById('wa-profile-status');
+      status.textContent='Guardando...';
+      try{
+        const response=await fetch('/contactos/'+encodeURIComponent(numero)+'/detalles',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({empresa:document.getElementById('wa-profile-company').value,etiquetas:document.getElementById('wa-profile-tags').value})});
+        if(!response.ok)throw Error('No se pudo guardar');
+        status.textContent='Perfil guardado';
+      }catch(err){status.textContent=err.message}
+    });
     const waPendingBadge=document.getElementById('wa-nav-pending');
     const waPendingCount=document.getElementById('wa-pending-count');
     const waPendingObserver=new MutationObserver(() => {
