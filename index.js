@@ -105,13 +105,14 @@ app.use(async(req,res,next)=>{
       }
     }
   }catch(err){console.error("Error autenticando operador:",err.message);return res.status(503).send("Autenticación temporalmente no disponible")}
+  if(req.accepts("html"))return res.redirect("/login.html");
   res.setHeader("WWW-Authenticate",'Basic realm="KNJ WhatsApp CRM"');
   res.setHeader("Cache-Control","no-store");
   return res.status(401).send("Autenticación requerida");
 });
 function requireAdmin(req,res,next){if(req.crmRole!=="admin")return res.status(403).json({error:"Se requieren permisos de administrador"});next()}
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"),{index:false}));
 // Ruta principal explícita para comprobar que el CRM sirve su interfaz.
 app.get("/", (req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
 app.get("/health", (req,res)=>res.status(200).json({ok:true,service:"knj-whatsapp-crm"}));
