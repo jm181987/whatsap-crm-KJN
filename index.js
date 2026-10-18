@@ -1515,7 +1515,7 @@ app.get("/dashboard/seguimiento",async(req,res)=>{
         COUNT(*) FILTER (WHERE COALESCE(archivado,0)=0 AND ultima_interaccion IS NOT NULL
           AND NULLIF(ultima_interaccion::text,'') IS NOT NULL
           AND ultima_interaccion::text ~ '^\\d{4}-\\d{2}-\\d{2}'
-          AND LEFT(ultima_interaccion::text,10)::date < CURRENT_DATE - 3)::int AS sin_seguimiento
+          AND LEFT(ultima_interaccion::text,10) < TO_CHAR(CURRENT_DATE - 3,'YYYY-MM-DD'))::int AS sin_seguimiento
       FROM clientes`);
     res.setHeader("Cache-Control","no-store");
     res.json(rows[0]||{activos:0,nuevos:0,callbacks:0,analistas:0,sin_seguimiento:0});
