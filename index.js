@@ -191,6 +191,7 @@ app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
       await query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_mensajes WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_seguimientos WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_miembros WHERE tenant_id=$1",[id]);
@@ -324,6 +325,36 @@ app.patch("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios/:id",tenantAccess
 app.delete("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios/:id",tenantAccess,async(req,res)=>{
   try{const rows=await db.query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Recordatorio inexistente"});res.json({ok:true})}
   catch(e){res.status(500).json({error:"No se pudo eliminar recordatorio"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard",tenantAccess,async(req,res)=>{
+  const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
+  try{
+    const rows=await db.query("SELECT (SELECT COUNT(*)::int FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2) AS contactos,(SELECT COUNT(*)::int FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2) AS mensajes,(SELECT COUNT(*)::int FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND direccion='recibido') AS recibidos,(SELECT COUNT(*)::int FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND direccion='enviado') AS enviados,(SELECT COUNT(*)::int FROM crm_tenant_recordatorios WHERE tenant_id=$1 AND cuenta_id=$2 AND completado=FALSE) AS recordatorios,(SELECT COUNT(*)::int FROM crm_tenant_seguimientos WHERE tenant_id=$1 AND cuenta_id=$2 AND estado!='completado') AS seguimientos",[t,c]);
+    const kanban=await db.query("SELECT etiqueta,COUNT(*)::int AS total FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 AND archivado=FALSE GROUP BY etiqueta ORDER BY total DESC",[t,c]);
+    res.json({...rows[0],kanban});
+  }catch(e){console.error("Tenant dashboard:",e);res.status(500).json({error:"No se pudo cargar el panel"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/seguimientos",tenantAccess,async(req,res)=>{
+  try{res.json(await db.query("SELECT id,numero,descripcion,estado,creado_en FROM crm_tenant_seguimientos WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY id DESC LIMIT 500",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  catch(e){res.status(500).json({error:"No se pudieron cargar seguimientos"})}
+});
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/seguimientos",tenantAccess,async(req,res)=>{
+  const numero=String(req.body?.numero||""),descripcion=String(req.body?.descripcion||"").trim();
+  if(!numero||!descripcion||descripcion.length>2000)return res.status(400).json({error:"Seguimiento inválido"});
+  try{
+    const found=await db.query("SELECT 1 FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]);
+    if(!found.length)return res.status(404).json({error:"Contacto inexistente"});
+    res.status(201).json((await db.query("INSERT INTO crm_tenant_seguimientos(tenant_id,cuenta_id,numero,descripcion) VALUES($1,$2,$3,$4) RETURNING id,numero,descripcion,estado",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,descripcion]))[0]);
+  }catch(e){res.status(500).json({error:"No se pudo crear seguimiento"})}
+});
+app.patch("/tenants/:tenantId/whatsapp/:cuentaId/seguimientos/:id",tenantAccess,async(req,res)=>{
+  if(!["pendiente","en_progreso","completado"].includes(req.body?.estado))return res.status(400).json({error:"Estado inválido"});
+  try{const rows=await db.query("UPDATE crm_tenant_seguimientos SET estado=$4 WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id,estado",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id,req.body.estado]);if(!rows.length)return res.status(404).json({error:"Seguimiento inexistente"});res.json(rows[0])}
+  catch(e){res.status(500).json({error:"No se pudo actualizar seguimiento"})}
+});
+app.delete("/tenants/:tenantId/whatsapp/:cuentaId/seguimientos/:id",tenantAccess,async(req,res)=>{
+  try{const rows=await db.query("DELETE FROM crm_tenant_seguimientos WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Seguimiento inexistente"});res.json({ok:true})}
+  catch(e){res.status(500).json({error:"No se pudo eliminar seguimiento"})}
 });
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/mensajes",tenantAccess,async(req,res)=>{
   const numero=String(req.query.numero||"");if(!numero)return res.status(400).json({error:"Número requerido"});
