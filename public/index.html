@@ -1057,6 +1057,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       </form>
       <p id="wa-operators-status" role="status"></p><div id="wa-operators-list"></div>
     </section>
+    <div style="margin:12px 0"><button type="button" id="wa-logout" style="padding:10px 16px;border-radius:8px">Cerrar sesión</button></div>
     <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
     <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
     <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
@@ -3210,6 +3211,11 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       }catch(err){status.textContent=err.message}
     });
     document.getElementById('wa-nav-dash').addEventListener('click',waLoadOperators);
+    document.getElementById('wa-logout').addEventListener('click',async()=>{
+      try{await fetch('/auth/logout',{method:'POST'});location.replace('/login.html')}
+      catch(e){alert('No se pudo cerrar la sesión')}
+    });
+
 
 
 
