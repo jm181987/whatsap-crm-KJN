@@ -54,6 +54,26 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
 app.get("/health", (req,res)=>res.status(200).json({ok:true,service:"knj-whatsapp-crm"}));
 
+// Registro de operaciones: no almacena contenidos de mensajes ni credenciales.
+// El usuario es el de Basic Auth hasta habilitar cuentas independientes.
+app.use((req,res,next)=>{
+  const tracked=/^\/(?:clientes|contactos|recordatorios|seguimientos)\//.test(req.path);
+  if(!tracked||!["POST","PUT","PATCH","DELETE"].includes(req.method))return next();
+  res.on("finish",()=>{
+    db.query("INSERT INTO crm_auditoria(actor,accion,recurso,resultado) VALUES($1,$2,$3,$4)",[
+      crmUser,req.method,req.path.replace(/\/[0-9]{8,15}(?:%40[^/]*)?/g,"/:contacto").slice(0,250),res.statusCode
+    ]).catch(err=>console.error("Error auditoría:",err.message));
+  });
+  next();
+});
+app.get("/auditoria/reciente",async(req,res)=>{
+  try{
+    const rows=await db.query("SELECT id,actor,accion,recurso,resultado,fecha FROM crm_auditoria ORDER BY fecha DESC LIMIT 60");
+    res.setHeader("Cache-Control","no-store");
+    res.json(rows);
+  }catch(err){console.error("Error consultando auditoría:",err);res.status(500).json({error:"No se pudo consultar la actividad"})}
+});
+
 // Crear directorios necesarios si no existen
 const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', process.env.SESSION_DIR || 'session'];
 directories.forEach(dir => {
