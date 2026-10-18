@@ -931,6 +931,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <button type="button" id="wa-nav-kanban" title="Módulo Kanban" aria-label="Kanban">🗂️</button>
     <button type="button" id="wa-nav-contactos" title="Agendar contacto" aria-label="Agendar contacto">👤</button>
     <button type="button" id="wa-nav-dash" title="Panel de actividad" aria-label="Panel de actividad">📊</button>
+    <button type="button" id="wa-nav-companies" title="Bandejas de empresas" aria-label="Bandejas de empresas">🏢</button>
     <button type="button" id="wa-nav-admin" title="Administración" aria-label="Administración" hidden>🛡️</button>
     <button type="button" id="wa-nav-pending" title="Pendientes" aria-label="Mensajes pendientes">🔔</button>
     <button type="button" id="wa-nav-theme" title="Cambiar tema" aria-label="Cambiar tema">🌓</button>
@@ -1079,7 +1080,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 @media(max-width:600px){.wa-tenant-card{padding:12px}.wa-tenant-grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 <section id="wa-admin-panel" aria-label="Administración" hidden>
-    <div class="wa-dash-head"><div><h2>Administración</h2><p>Operadores y registro de actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
+    <div class="wa-dash-head"><div><h2 id="wa-admin-title">Administración</h2><p id="wa-admin-description">Empresas, operadores y actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
     <section class="wa-dash-card" id="wa-tenants-card">
 <div class="wa-admin-section-head"><div><h3>Empresas</h3><p>Administrá compañías, accesos y números conectados desde un solo lugar.</p></div><span id="wa-tenant-count"></span></div>
 <form id="wa-tenant-create" style="display:flex;gap:8px;flex-wrap:wrap"><input name="nombre" placeholder="Nombre de empresa" required minlength="2" maxlength="120"><button>Crear empresa</button></form>
@@ -3381,7 +3382,8 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
               status.textContent=result.advertencia||'Empresa y todos sus datos eliminados';
             }catch(e){status.textContent=e.message}
           };
-          actions.append(edit,remove);header.append(info,actions);
+          const inbox=document.createElement('button');inbox.type='button';inbox.textContent='Abrir chats';inbox.onclick=()=>waOpenCompanyInbox(tenant.id).catch(e=>status.textContent=e.message);
+          actions.prepend(inbox);actions.append(edit,remove);header.append(info,actions);
           const settings=document.createElement('details');settings.className='wa-tenant-details';
           const summary=document.createElement('summary');summary.textContent='Configuración y accesos';
           const modeLabel=document.createElement('label');modeLabel.textContent='Visibilidad de WhatsApp';
@@ -3438,10 +3440,29 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         waAdminPanel.classList.remove('open');waAdminPanel.hidden=true;
       });
     }
+    const waCompanyNav=document.getElementById('wa-nav-companies');
+    async function waOpenCompanyInbox(tenantId){
+      document.getElementById('wa-tenants-card').hidden=true;
+      document.getElementById('wa-audit-card').hidden=true;
+      document.getElementById('wa-operators-card').hidden=true;
+      document.getElementById('wa-admin-title').textContent='Bandeja de empresas';
+      document.getElementById('wa-admin-description').textContent='Elegí una empresa y una cuenta para consultar sus chats';
+      document.getElementById('wa-dashboard').classList.remove('open');
+      waAdminPanel.hidden=false;waAdminPanel.classList.add('open');
+      await waInboxTenants();
+      if(tenantId){
+        waInboxTenant.value=String(tenantId);
+        if(waInboxTenant.value){await waInboxAccounts();if(waInboxAccount.options.length===2){waInboxAccount.selectedIndex=1;await waInboxContacts()}}
+      }
+      document.getElementById('wa-tenant-inbox').scrollIntoView({block:'start',behavior:'smooth'});
+    }
+    waCompanyNav.onclick=()=>waOpenCompanyInbox().catch(e=>waInboxStatus.textContent=e.message);
     waAdminNav.addEventListener('click',async()=>{
       const me=await waOperatorRequest('/operadores/yo').catch(()=>null);
       if(!me)return;
       const isAdmin=me.rol==='admin';
+      document.getElementById('wa-admin-title').textContent=isAdmin?'Administración':'Mis empresas y chats';
+      document.getElementById('wa-admin-description').textContent=isAdmin?'Empresas, operadores y actividad':'Conversaciones por empresa';
       document.getElementById('wa-tenants-card').hidden=!isAdmin;
       document.getElementById('wa-audit-card').hidden=!isAdmin;
       document.getElementById('wa-operators-card').hidden=!isAdmin;
