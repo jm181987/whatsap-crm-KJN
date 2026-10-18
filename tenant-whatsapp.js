@@ -18,10 +18,10 @@ export function createTenantWhatsApp(db) {
     const key = Number(account.id);
     if (instances.has(key)) {
       const current=instances.get(key);
-      if(current.status==="sesion_cerrada"||current.status==="error"){stop(key)}
+      if(current.status==="error"){stop(key)}
       else return current.status;
     }
-    const item = {status:"iniciando",qr:null,socket:null,retry:null,stopped:false};
+    const item = {status:"iniciando",qr:null,socket:null,retry:null,stopped:false,attempt:0,lastError:null};
     instances.set(key,item);
     async function connect() {
       if(item.stopped)return;
@@ -41,7 +41,7 @@ export function createTenantWhatsApp(db) {
         socket.ev.on("connection.update",update=>{
           if(item.stopped||item.socket!==socket)return;
           if(update.qr){qrcode.toDataURL(update.qr).then(data=>{if(!item.stopped&&item.socket===socket){item.qr=data;item.status="qr"}}).catch(e=>console.error("Tenant QR:",e))}
-          if(update.connection==="open"){item.qr=null;item.status="conectado";}
+          if(update.connection==="open"){item.qr=null;item.status="conectado";item.attempt=0;item.lastError=null;}
           if(update.connection==="close"){
             item.socket=null;item.qr=null;
             try{socket.ev.removeAllListeners("creds.update")}catch{}
@@ -49,10 +49,15 @@ export function createTenantWhatsApp(db) {
             const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
             item.status=loggedOut?"sesion_cerrada":"desconectado";
             if(loggedOut){
-             try{archiveInvalidSession(dir);item.status="reconectando";if(!item.stopped)item.retry=setTimeout(connect,1500)}
-             catch(err){item.status="sesion_cerrada";console.error("Tenant session archive failed:",err)}
-           }
-           if(!loggedOut&&!item.stopped)item.retry=setTimeout(connect,5000);
+              // A 401 means credentials were revoked; never destroy or archive keys
+              // automatically. An explicit administrator reset is required.
+              item.lastError="Sesión desvinculada (401). Reconectá esta cuenta desde Administración.";
+              console.warn("Tenant session revoked:",account.tenant_id,key);
+            }else if(!item.stopped){
+              item.attempt=Math.min(item.attempt+1,6);
+              item.status="reconectando";
+              item.retry=setTimeout(connect,Math.min(60000,3000*2**(item.attempt-1)));
+            }
           }
         });
         socket.ev.on("messages.upsert",async event=>{
@@ -106,7 +111,14 @@ export function createTenantWhatsApp(db) {
     await connect();
     return item.status;
   }
-  function status(id){const item=instances.get(Number(id));return {estado:item?.status||"no_iniciada",qr:item?.qr||null}}
+  function status(id){const item=instances.get(Number(id));return {estado:item?.status||"no_iniciada",qr:item?.qr||null,error:item?.lastError||null}}
+  async function reset(account){
+    const key=Number(account.id);
+    stop(key);
+    const dir=path.join(base,String(account.tenant_id),String(key));
+    if(fs.existsSync(dir))archiveInvalidSession(dir);
+    return start(account);
+  }
   async function send(id,numero,texto){
     const item=instances.get(Number(id));
     if(item?.status!=="conectado"||!item.socket)throw new Error("WhatsApp no conectado");
@@ -127,5 +139,5 @@ export function createTenantWhatsApp(db) {
     const item=instances.get(Number(id));if(!item)return;
     item.stopped=true;clearTimeout(item.retry);item.socket?.end?.(new Error("Detenido por administrador"));instances.delete(Number(id));
   }
-  return {start,status,send,sendMedia,stop};
+  return {start,reset,status,send,sendMedia,stop};
 }
