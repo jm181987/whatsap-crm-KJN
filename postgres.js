@@ -11,7 +11,6 @@ const schema = [
   `CREATE TABLE IF NOT EXISTS crm_whatsapp_asignaciones (tenant_id BIGINT NOT NULL REFERENCES crm_tenants(id), cuenta_id BIGINT NOT NULL REFERENCES crm_whatsapp_cuentas(id), usuario TEXT NOT NULL, creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(tenant_id,cuenta_id,usuario), FOREIGN KEY(tenant_id,usuario) REFERENCES crm_tenant_miembros(tenant_id,usuario))`,
   `CREATE INDEX IF NOT EXISTS crm_whatsapp_asignaciones_usuario_idx ON crm_whatsapp_asignaciones(tenant_id,usuario)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS crm_whatsapp_cuentas_tenant_id_id_idx ON crm_whatsapp_cuentas(tenant_id,id)`,
-  `DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='crm_whatsapp_asignaciones_tenant_cuenta_fk') THEN ALTER TABLE crm_whatsapp_asignaciones ADD CONSTRAINT crm_whatsapp_asignaciones_tenant_cuenta_fk FOREIGN KEY (tenant_id,cuenta_id) REFERENCES crm_whatsapp_cuentas(tenant_id,id); END IF; END import pg from "pg";
 const { Pool } = pg;
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL es obligatoria para PostgreSQL");
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 10000 });
