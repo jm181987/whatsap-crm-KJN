@@ -125,7 +125,7 @@ app.use(async(req,res,next)=>{
 });
 function requireAdmin(req,res,next){if(req.crmRole!=="admin")return res.status(403).json({error:"Se requieren permisos de administrador"});next()}
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public"),{index:false}));
+app.use(express.static(path.join(__dirname, "public"),{index:false,dotfiles:"deny",setHeaders:(res,file)=>{if(file.endsWith(".json"))res.setHeader("Cache-Control","no-store")}}));
 // Ruta principal explícita para comprobar que el CRM sirve su interfaz.
 app.get("/", (req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
 app.get("/health", (req,res)=>res.status(200).json({ok:true,service:"knj-whatsapp-crm"}));
@@ -1452,7 +1452,7 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 ======================================================== */
 
 // Endpoint QR
-app.get("/qr.json", (req, res) => {
+app.get("/qr.json", requireAdmin, (req, res) => {
   try {
     if (fs.existsSync("public/qr.json")) {
       const qrData = fs.readFileSync("public/qr.json", "utf8");
@@ -1466,7 +1466,7 @@ app.get("/qr.json", (req, res) => {
 });
 
 // Endpoint notificaciones
-app.get("/notify.json", (req, res) => {
+app.get("/notify.json", requireAdmin, (req, res) => {
   try {
     if (fs.existsSync("public/notify.json")) {
       const notifyData = fs.readFileSync("public/notify.json", "utf8");
