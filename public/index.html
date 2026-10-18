@@ -3305,7 +3305,19 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       const messages=await waOperatorRequest(waInboxBase()+'/mensajes?numero='+encodeURIComponent(waInboxNumber));
       const box=document.getElementById('wa-inbox-messages');box.replaceChildren();
       for(const m of messages.reverse()){
-        const line=document.createElement('p');line.textContent=(m.direccion==='enviado'?'→ ':'← ')+m.texto;
+        const line=document.createElement('div');line.className='wa-inbox-message';
+        const label=document.createElement('p');label.textContent=(m.direccion==='enviado'?'→ ':'← ')+m.texto;line.append(label);
+        if(m.tiene_media){
+          const url=waInboxBase()+'/media/'+encodeURIComponent(m.id);
+          const mime=m.media_mime||'';
+          let element;
+          if(mime.startsWith('image/')){element=document.createElement('img');element.alt=m.media_nombre||'Imagen recibida';element.style.maxWidth='min(100%,340px)';element.style.maxHeight='360px';}
+          else if(mime.startsWith('video/')){element=document.createElement('video');element.controls=true;element.style.maxWidth='min(100%,420px)';}
+          else if(mime.startsWith('audio/')){element=document.createElement('audio');element.controls=true;}
+          else{element=document.createElement('a');element.textContent='Descargar '+(m.media_nombre||'archivo');element.href=url;element.target='_blank';element.rel='noopener';}
+          if(element.tagName!=='A')element.src=url;
+          line.append(element);
+        }
         box.appendChild(line);
       }
     }
