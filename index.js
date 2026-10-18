@@ -829,7 +829,7 @@ async function iniciarWhatsApp() {
     });
 
     // Configurar manejo de mensajes
-    configurarManejoMensajes();
+    configurarManejoMensajes(sock);
 
   } catch (error) {
     console.error("Error iniciando WhatsApp:", error);
@@ -893,60 +893,35 @@ async function resolveConversationJid(jid, alternativeJid) {
   return alternativeJid && phoneKey(alternativeJid) ? alternativeJid : jid;
 }
 
-function configurarManejoMensajes() {
-  
-  sock.ev.on("messages.upsert", async (m) => {
-    try {
-      if (!m.messages || m.messages.length === 0) return;
-
-      for (const msg of m.messages) {
-      
-      // Ignorar mensajes propios y estados
-      if (msg.key.fromMe || !msg.message || msg.key.remoteJid === "status@broadcast") continue;
-      if (msg.message.protocolMessage || msg.message.senderKeyDistributionMessage || msg.message.reactionMessage) continue;
-
-      // WhatsApp may wrap incoming media in ephemeral/view-once containers.
-      const wrapped = msg.message.ephemeralMessage?.message
-        || msg.message.viewOnceMessageV2?.message
-        || msg.message.viewOnceMessage?.message
-        || msg.message.documentWithCaptionMessage?.message;
-      if (wrapped) msg.message = wrapped;
-      const numero = await resolveConversationJid(msg.key.remoteJid, msg.key.remoteJidAlt);
-      const contacto = msg.pushName || "Desconocido";
-      const fecha = new Date().toISOString();
-
-      console.log("📨 Mensaje recibido de:", contacto, "Tipo:", Object.keys(msg.message)[0]);
-
-      // Manejar mensajes de audio
-      if (msg.message.audioMessage) {
-        await procesarMensajeAudio(msg, numero, contacto, fecha);
-        continue;
+function configurarManejoMensajes(socket) {
+  socket.ev.on("messages.upsert", async (event) => {
+    if (socket !== sock) return;
+    console.log("📥 WhatsApp principal: evento", event.type, "mensajes", event.messages?.length || 0);
+    for (const msg of event.messages || []) {
+      try {
+        if (msg.key?.fromMe || !msg.message || msg.key?.remoteJid === "status@broadcast") continue;
+        let content = msg.message;
+        for (let depth=0; depth<6; depth++) {
+          const nested=content.ephemeralMessage?.message || content.viewOnceMessage?.message ||
+            content.viewOnceMessageV2?.message || content.viewOnceMessageV2Extension?.message ||
+            content.documentWithCaptionMessage?.message || content.editedMessage?.message;
+          if (!nested) break;
+          content=nested;
+        }
+        if (content.protocolMessage || content.senderKeyDistributionMessage || content.reactionMessage) continue;
+        const numero=await resolveConversationJid(msg.key.remoteJid,msg.key.remoteJidAlt);
+        const contacto=msg.pushName || "Desconocido";
+        const fecha=new Date().toISOString();
+        const incoming={...msg,message:content};
+        console.log("📨 Mensaje principal:",numero,Object.keys(content));
+        if (content.audioMessage) await procesarMensajeAudio(incoming,numero,contacto,fecha);
+        else if (content.imageMessage) await procesarMensajeImagen(incoming,numero,contacto,fecha);
+        else if (content.videoMessage) await procesarMensajeVideo(incoming,numero,contacto,fecha);
+        else if (content.documentMessage) await procesarMensajeDocumento(incoming,numero,contacto,fecha);
+        else await procesarMensajeTexto(incoming,numero,contacto,fecha);
+      } catch (error) {
+        console.error("❌ Error en mensaje principal",msg?.key?.id,msg?.key?.remoteJid,error);
       }
-
-      // Manejar mensajes de imagen
-      if (msg.message.imageMessage) {
-        await procesarMensajeImagen(msg, numero, contacto, fecha);
-        continue;
-      }
-
-      // Manejar mensajes de video
-      if (msg.message.videoMessage) {
-        await procesarMensajeVideo(msg, numero, contacto, fecha);
-        continue;
-      }
-
-      // Manejar mensajes de documento
-      if (msg.message.documentMessage) {
-        await procesarMensajeDocumento(msg, numero, contacto, fecha);
-        continue;
-      }
-
-      // Manejar mensajes de texto
-      await procesarMensajeTexto(msg, numero, contacto, fecha);
-      }
-
-    } catch (error) {
-      console.error("Error procesando mensaje:", error);
     }
   });
 }
