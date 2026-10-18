@@ -3242,10 +3242,61 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       }catch{}
     }
 
+    let waInboxNumber='';
+    const waInboxTenant=document.getElementById('wa-inbox-tenant');
+    const waInboxAccount=document.getElementById('wa-inbox-account');
+    const waInboxStatus=document.getElementById('wa-inbox-status');
+    const waInboxBase=()=>'/tenants/'+waInboxTenant.value+'/whatsapp/'+waInboxAccount.value;
+    async function waInboxTenants(){
+      const tenants=await waOperatorRequest('/admin/tenants');
+      waInboxTenant.replaceChildren(new Option('Elegir empresa',''));
+      tenants.forEach(t=>waInboxTenant.add(new Option(t.nombre,t.id)));
+    }
+    async function waInboxAccounts(){
+      waInboxAccount.replaceChildren(new Option('Elegir WhatsApp',''));
+      if(!waInboxTenant.value)return;
+      const accounts=await waOperatorRequest('/admin/tenants/'+waInboxTenant.value+'/cuentas');
+      accounts.forEach(a=>waInboxAccount.add(new Option(a.nombre,a.id)));
+    }
+    async function waInboxMessages(){
+      if(!waInboxNumber)return;
+      const messages=await waOperatorRequest(waInboxBase()+'/mensajes?numero='+encodeURIComponent(waInboxNumber));
+      const box=document.getElementById('wa-inbox-messages');box.replaceChildren();
+      for(const m of messages.reverse()){
+        const line=document.createElement('p');line.textContent=(m.direccion==='enviado'?'→ ':'← ')+m.texto;
+        box.appendChild(line);
+      }
+    }
+    async function waInboxContacts(){
+      waInboxNumber='';document.getElementById('wa-inbox-title').textContent='';
+      document.getElementById('wa-inbox-messages').replaceChildren();
+      const box=document.getElementById('wa-inbox-contacts');box.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      try{
+        const contacts=await waOperatorRequest(waInboxBase()+'/contactos');
+        for(const c of contacts){
+          const button=document.createElement('button');button.type='button';button.style.display='block';
+          button.textContent=c.nombre||c.numero;button.onclick=async()=>{
+            waInboxNumber=c.numero;document.getElementById('wa-inbox-title').textContent=button.textContent;
+            try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
+          };box.appendChild(button);
+        }
+      }catch(e){waInboxStatus.textContent=e.message}
+    }
+    waInboxTenant.onchange=async()=>{try{await waInboxAccounts();await waInboxContacts()}catch(e){waInboxStatus.textContent=e.message}};
+    waInboxAccount.onchange=waInboxContacts;
+    document.getElementById('wa-inbox-reload').onclick=waInboxContacts;
+    document.getElementById('wa-inbox-send').onsubmit=async e=>{
+      e.preventDefault();if(!waInboxNumber)return;
+      try{
+        await waOperatorRequest(waInboxBase()+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:waInboxNumber,mensaje:document.getElementById('wa-inbox-text').value})});
+        document.getElementById('wa-inbox-text').value='';await waInboxMessages();
+      }catch(err){waInboxStatus.textContent=err.message}
+    };
     async function waLoadTenants(){
       const list=document.getElementById('wa-tenants-list'),status=document.getElementById('wa-tenants-status');
       try{
-        const tenants=await waOperatorRequest('/admin/tenants');list.replaceChildren();
+        const tenants=await waOperatorRequest('/admin/tenants');list.replaceChildren();waInboxTenants().catch(e=>waInboxStatus.textContent=e.message);
         for(const tenant of tenants){
           const section=document.createElement('section');section.className='wa-dash-card';section.style.margin='12px 0';
           const title=document.createElement('h4');title.textContent=tenant.nombre+' (#'+tenant.id+')';
