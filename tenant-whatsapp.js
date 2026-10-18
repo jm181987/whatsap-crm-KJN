@@ -21,9 +21,9 @@ export function createTenantWhatsApp(db) {
         const socket=makeWASocket({version,auth:state,printQRInTerminal:false,syncFullHistory:false});
         item.socket=socket;
         socket.ev.on("creds.update",saveCreds);
-        socket.ev.on("connection.update",async update=>{
+        socket.ev.on("connection.update",update=>{
           if(item.stopped||item.socket!==socket)return;
-          if(update.qr){item.qr=await qrcode.toDataURL(update.qr);item.status="qr";}
+          if(update.qr){qrcode.toDataURL(update.qr).then(data=>{if(!item.stopped&&item.socket===socket){item.qr=data;item.status="qr"}}).catch(e=>console.error("Tenant QR:",e))}
           if(update.connection==="open"){item.qr=null;item.status="conectado";}
           if(update.connection==="close"){
             item.socket=null;item.qr=null;
