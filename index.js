@@ -15,7 +15,7 @@ import fs from "fs";
 import multer from "multer";
 import { db, initDatabase, withTransaction } from "./postgres.js";
 import http from "http";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, scrypt as scryptCallback, randomBytes } from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Parser } from "json2csv";
@@ -35,19 +35,45 @@ function secureEqual(a, b) {
   const aa = Buffer.from(a), bb = Buffer.from(b);
   return aa.length === bb.length && timingSafeEqual(aa, bb);
 }
-app.use((req, res, next) => {
-  const header = req.headers.authorization || "";
-  if (header.startsWith("Basic ")) {
-    try {
-      const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-      const separator = decoded.indexOf(":");
-      if (separator !== -1 && secureEqual(decoded.slice(0, separator), crmUser) && secureEqual(decoded.slice(separator + 1), crmPassword)) return next();
-    } catch {}
+const scrypt=promisify(scryptCallback);
+async function passwordHash(password){
+  const salt=randomBytes(16).toString("hex");
+  const key=await scrypt(password,salt,64);
+  return salt+":"+key.toString("hex");
+}
+async function verifyPassword(password,stored){
+  const [salt,hex]=String(stored).split(":");
+  if(!salt||!hex||!/^[a-f0-9]{128}$/.test(hex))return false;
+  const expected=Buffer.from(hex,"hex");
+  const actual=await scrypt(password,salt,expected.length);
+  return timingSafeEqual(actual,expected);
+}
+app.use(async(req,res,next)=>{
+  const header=req.headers.authorization||"";
+  let username="",password="";
+  if(header.startsWith("Basic ")){
+    try{
+      const decoded=Buffer.from(header.slice(6),"base64").toString("utf8");
+      const separator=decoded.indexOf(":");
+      if(separator>=0){username=decoded.slice(0,separator);password=decoded.slice(separator+1)}
+    }catch{}
   }
-  res.setHeader("WWW-Authenticate", 'Basic realm="KNJ WhatsApp CRM"');
-  res.setHeader("Cache-Control", "no-store");
+  try{
+    if(secureEqual(username,crmUser)&&secureEqual(password,crmPassword)){
+      req.crmActor=crmUser;req.crmRole="admin";return next();
+    }
+    if(username&&password){
+      const rows=await db.query("SELECT usuario,password_hash,rol FROM crm_operadores WHERE usuario=$1 AND activo=TRUE",[username]);
+      if(rows.length&&await verifyPassword(password,rows[0].password_hash)){
+        req.crmActor=rows[0].usuario;req.crmRole=rows[0].rol;return next();
+      }
+    }
+  }catch(err){console.error("Error autenticando operador:",err.message);return res.status(503).send("Autenticación temporalmente no disponible")}
+  res.setHeader("WWW-Authenticate",'Basic realm="KNJ WhatsApp CRM"');
+  res.setHeader("Cache-Control","no-store");
   return res.status(401).send("Autenticación requerida");
 });
+function requireAdmin(req,res,next){if(req.crmRole!=="admin")return res.status(403).json({error:"Se requieren permisos de administrador"});next()}
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 // Ruta principal explícita para comprobar que el CRM sirve su interfaz.
@@ -61,12 +87,12 @@ app.use((req,res,next)=>{
   if(!tracked||!["POST","PUT","PATCH","DELETE"].includes(req.method))return next();
   res.on("finish",()=>{
     db.query("INSERT INTO crm_auditoria(actor,accion,recurso,resultado) VALUES($1,$2,$3,$4)",[
-      crmUser,req.method,req.path.replace(/\/[0-9]{8,15}(?:%40[^/]*)?/g,"/:contacto").slice(0,250),res.statusCode
+      req.crmActor,req.method,req.path.replace(/\/[0-9]{8,15}(?:%40[^/]*)?/g,"/:contacto").slice(0,250),res.statusCode
     ]).catch(err=>console.error("Error auditoría:",err.message));
   });
   next();
 });
-app.get("/auditoria/reciente",async(req,res)=>{
+app.get("/auditoria/reciente",requireAdmin,async(req,res)=>{
   try{
     const rows=await db.query("SELECT id,actor,accion,recurso,resultado,fecha FROM crm_auditoria ORDER BY fecha DESC LIMIT 60");
     res.setHeader("Cache-Control","no-store");
@@ -74,6 +100,39 @@ app.get("/auditoria/reciente",async(req,res)=>{
   }catch(err){console.error("Error consultando auditoría:",err);res.status(500).json({error:"No se pudo consultar la actividad"})}
 });
 
+app.get("/operadores/yo",(req,res)=>res.json({usuario:req.crmActor,rol:req.crmRole}));
+app.get("/operadores",requireAdmin,async(req,res)=>{
+  try{res.json(await db.query("SELECT id,usuario,rol,activo,creado_en FROM crm_operadores ORDER BY id"))}
+  catch(err){console.error(err);res.status(500).json({error:"Error consultando operadores"})}
+});
+app.post("/operadores",requireAdmin,async(req,res)=>{
+  const usuario=String(req.body?.usuario||"").trim();
+  const password=req.body?.password;
+  const rol=req.body?.rol==="admin"?"admin":"operador";
+  if(!/^[a-zA-Z0-9_.-]{3,40}$/.test(usuario)||typeof password!=="string"||password.length<12||password.length>128)
+    return res.status(400).json({error:"Usuario de 3 a 40 caracteres y contraseña de 12 a 128"});
+  if(secureEqual(usuario,crmUser))return res.status(409).json({error:"Usuario reservado"});
+  try{
+    const hash=await passwordHash(password);
+    const rows=await db.query("INSERT INTO crm_operadores(usuario,password_hash,rol) VALUES($1,$2,$3) RETURNING id,usuario,rol,activo",[usuario,hash,rol]);
+    res.status(201).json(rows[0]);
+  }catch(err){res.status(err.code==="23505"?409:500).json({error:err.code==="23505"?"El usuario ya existe":"No se pudo crear el operador"})}
+});
+app.patch("/operadores/:id",requireAdmin,async(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({error:"ID inválido"});
+  const rol=req.body?.rol,activo=req.body?.activo,password=req.body?.password;
+  if(rol!==undefined&&!["admin","operador"].includes(rol))return res.status(400).json({error:"Rol inválido"});
+  if(activo!==undefined&&typeof activo!=="boolean")return res.status(400).json({error:"Estado inválido"});
+  if(password!==undefined&&(typeof password!=="string"||password.length<12||password.length>128))return res.status(400).json({error:"Contraseña inválida"});
+  if(rol===undefined&&activo===undefined&&password===undefined)return res.status(400).json({error:"Sin cambios"});
+  try{
+    const hash=password===undefined?null:await passwordHash(password);
+    const rows=await db.query("UPDATE crm_operadores SET rol=COALESCE($2,rol),activo=COALESCE($3,activo),password_hash=COALESCE($4,password_hash) WHERE id=$1 RETURNING id,usuario,rol,activo",[id,rol??null,activo??null,hash]);
+    if(!rows.length)return res.status(404).json({error:"Operador no encontrado"});
+    res.json(rows[0]);
+  }catch(err){console.error(err);res.status(500).json({error:"No se pudo actualizar el operador"})}
+});
 // Crear directorios necesarios si no existen
 const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', process.env.SESSION_DIR || 'session'];
 directories.forEach(dir => {
@@ -1532,7 +1591,7 @@ app.post("/contactos/vincular", async (req,res)=>{
 });
 
 // Exportación manual de datos comerciales. No incluye sesiones ni credenciales.
-app.get("/exportacion/comercial.json",async(req,res)=>{
+app.get("/exportacion/comercial.json",requireAdmin,async(req,res)=>{
   try{
     const [clientes,detalles,recordatorios,respuestas]=await Promise.all([
       db.query("SELECT numero,nombre,etiqueta,ultima_interaccion,archivado,nota FROM clientes ORDER BY id"),
@@ -1548,7 +1607,7 @@ app.get("/exportacion/comercial.json",async(req,res)=>{
 });
 
 // Respaldo lógico completo de las tablas CRM. Los archivos físicos y la sesión de WhatsApp requieren copia del volumen.
-app.get("/exportacion/respaldo.json",async(req,res)=>{
+app.get("/exportacion/respaldo.json",requireAdmin,async(req,res)=>{
   try{
     const [clientes,detalles,recordatorios,respuestas,mensajes,aliases]=await Promise.all([
       db.query("SELECT * FROM clientes ORDER BY id"),
