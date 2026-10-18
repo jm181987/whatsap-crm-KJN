@@ -1511,6 +1511,22 @@ app.post("/contactos/vincular", async (req,res)=>{
   }catch(e){console.error("Error vinculando:",e);res.status(e.status||500).json({error:e.status?e.message:"Error de base de datos al vincular: "+e.message,code:e.code||null})}
 });
 
+// Exportación manual de datos comerciales. No incluye sesiones ni credenciales.
+app.get("/exportacion/comercial.json",async(req,res)=>{
+  try{
+    const [clientes,detalles,recordatorios,respuestas]=await Promise.all([
+      db.query("SELECT numero,nombre,etiqueta,ultima_interaccion,archivado,nota FROM clientes ORDER BY id"),
+      db.query("SELECT numero,empresa,etiquetas,actualizado_en FROM contacto_detalles ORDER BY numero"),
+      db.query("SELECT id,numero,fecha_recordatorio,mensaje,completado,activo,created_at FROM recordatorios ORDER BY id"),
+      db.query("SELECT id,texto FROM respuestas ORDER BY id")
+    ]);
+    res.setHeader("Cache-Control","no-store");
+    res.setHeader("Content-Type","application/json; charset=utf-8");
+    res.setHeader("Content-Disposition",'attachment; filename="knj-crm-comercial.json"');
+    res.json({formato:"knj-crm-comercial",version:1,exportado_en:new Date().toISOString(),incluye_mensajes:false,clientes,detalles,recordatorios,respuestas});
+  }catch(err){console.error("Error exportación comercial:",err);res.status(500).json({error:"No se pudo exportar"})}
+});
+
 // Obtener clientes
 app.get("/clientes", async (req,res)=>{
   try{
