@@ -1108,7 +1108,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <details id="wa-inbox-reminders"><summary>Recordatorios de esta cuenta</summary>
 <form id="wa-inbox-reminder-form"><input id="wa-inbox-reminder-date" type="datetime-local" required><input id="wa-inbox-reminder-text" placeholder="Recordatorio" maxlength="2000"><button>Agregar</button></form>
 <div id="wa-inbox-reminder-list"></div>
-</details><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><p id="wa-inbox-status"></p></section>
+</details><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><form id="wa-inbox-media-form"><label>Enviar archivo al contacto seleccionado <input id="wa-inbox-media-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,audio/ogg,audio/mpeg,audio/mp4,application/pdf,text/plain,.docx" required></label><input id="wa-inbox-media-caption" placeholder="Texto opcional" maxlength="1024"><button>Enviar archivo</button></form><p id="wa-inbox-status"></p></section>
     <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <section class="wa-dash-card" id="wa-operators-card" style="margin:14px 0" hidden>
       <h3>Gestión de operadores</h3>
@@ -3309,6 +3309,18 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         box.appendChild(line);
       }
     }
+    document.getElementById('wa-inbox-media-form').onsubmit=async e=>{
+      e.preventDefault();
+      if(!waInboxNumber){waInboxStatus.textContent='Seleccioná un contacto';return}
+      const file=document.getElementById('wa-inbox-media-file').files[0];
+      if(!file||file.size>8*1024*1024){waInboxStatus.textContent='Archivo inválido o superior a 8 MB';return}
+      const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':'document';
+      try{
+        const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file)});
+        await waOperatorRequest(waInboxBase()+'/enviar-media',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:waInboxNumber,kind,mimeType:file.type,fileName:file.name,caption:document.getElementById('wa-inbox-media-caption').value,data})});
+        e.currentTarget.reset();waInboxStatus.textContent='Archivo enviado';await waInboxMessages();
+      }catch(err){waInboxStatus.textContent=err.message}
+    };
     async function waInboxQuickReplies(){
       const list=document.getElementById('wa-inbox-quick-list');list.replaceChildren();
       if(!waInboxTenant.value||!waInboxAccount.value)return;
