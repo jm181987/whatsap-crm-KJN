@@ -190,6 +190,7 @@ app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
       const accounts=await query("SELECT id FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_mensajes WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_miembros WHERE tenant_id=$1",[id]);
@@ -286,8 +287,43 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/conectar",tenantAccess,async(req
   catch(e){res.status(503).json({error:"No se pudo iniciar WhatsApp"})}
 });
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/contactos",tenantAccess,async(req,res)=>{
-  try{res.json(await db.query("SELECT numero,nombre FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY nombre,numero",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  try{res.json(await db.query("SELECT numero,nombre,etiqueta,nota,archivado FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY nombre,numero",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
   catch(e){res.status(500).json({error:"No se pudieron consultar los contactos"})}
+});
+app.patch("/tenants/:tenantId/whatsapp/:cuentaId/contactos/:numero",tenantAccess,async(req,res)=>{
+  const numero=String(req.params.numero||"");
+  const allowed=["nombre","etiqueta","nota","archivado"];
+  const fields=Object.keys(req.body||{});
+  if(!numero||!fields.length||fields.some(f=>!allowed.includes(f)))return res.status(400).json({error:"Datos inválidos"});
+  if(fields.some(f=>f!=="archivado"&&(typeof req.body[f]!=="string"||req.body[f].length>2000))||("archivado" in req.body&&typeof req.body.archivado!=="boolean"))return res.status(400).json({error:"Formato inválido"});
+  const updates=fields.map((f,i)=>f+"=$"+(i+4)).join(",");
+  try{
+    const rows=await db.query("UPDATE crm_tenant_contactos SET "+updates+" WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3 RETURNING numero,nombre,etiqueta,nota,archivado",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,...fields.map(f=>req.body[f])]);
+    if(!rows.length)return res.status(404).json({error:"Contacto inexistente"});
+    res.json(rows[0]);
+  }catch(e){console.error("Tenant contact update:",e);res.status(500).json({error:"No se pudo actualizar contacto"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios",tenantAccess,async(req,res)=>{
+  try{res.json(await db.query("SELECT id,numero,fecha_recordatorio,mensaje,completado FROM crm_tenant_recordatorios WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY completado,fecha_recordatorio LIMIT 500",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  catch(e){res.status(500).json({error:"No se pudieron cargar recordatorios"})}
+});
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios",tenantAccess,async(req,res)=>{
+  const numero=String(req.body?.numero||""),mensaje=String(req.body?.mensaje||""),fecha=String(req.body?.fecha_recordatorio||"");
+  if(!numero||mensaje.length>2000||!fecha||!Number.isFinite(Date.parse(fecha)))return res.status(400).json({error:"Recordatorio inválido"});
+  try{
+    const exists=await db.query("SELECT 1 FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]);
+    if(!exists.length)return res.status(404).json({error:"Contacto inexistente"});
+    res.status(201).json((await db.query("INSERT INTO crm_tenant_recordatorios(tenant_id,cuenta_id,numero,fecha_recordatorio,mensaje) VALUES($1,$2,$3,$4,$5) RETURNING id,numero,fecha_recordatorio,mensaje,completado",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,fecha,mensaje]))[0]);
+  }catch(e){res.status(500).json({error:"No se pudo crear recordatorio"})}
+});
+app.patch("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios/:id",tenantAccess,async(req,res)=>{
+  if(typeof req.body?.completado!=="boolean")return res.status(400).json({error:"Estado inválido"});
+  try{const rows=await db.query("UPDATE crm_tenant_recordatorios SET completado=$4 WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id,completado",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id,req.body.completado]);if(!rows.length)return res.status(404).json({error:"Recordatorio inexistente"});res.json(rows[0])}
+  catch(e){res.status(500).json({error:"No se pudo actualizar recordatorio"})}
+});
+app.delete("/tenants/:tenantId/whatsapp/:cuentaId/recordatorios/:id",tenantAccess,async(req,res)=>{
+  try{const rows=await db.query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Recordatorio inexistente"});res.json({ok:true})}
+  catch(e){res.status(500).json({error:"No se pudo eliminar recordatorio"})}
 });
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/mensajes",tenantAccess,async(req,res)=>{
   const numero=String(req.query.numero||"");if(!numero)return res.status(400).json({error:"Número requerido"});
