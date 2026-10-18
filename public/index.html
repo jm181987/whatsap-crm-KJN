@@ -1239,7 +1239,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     function editarContacto(c) {
       editingNumber=c.numero;
       const phone=c.numero.split('@')[0].split(':')[0];
-      const valid=/^\\d{8,15}$/.test(phone)&&!c.numero.endsWith('@lid');
+      const valid=/^\d{8,15}$/.test(phone)&&!c.numero.endsWith('@lid');
       document.getElementById('wa-contact-actions').hidden=!valid;
       document.getElementById('wa-export-vcf').disabled=!valid;
       if(valid){
@@ -1290,7 +1290,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
           const label=column.querySelector('h2').textContent;
           const count=clientes.filter(c=>(c.archivado?'archivado':c.etiqueta)===column.dataset.etiqueta).length;
           const chip=document.createElement('span');chip.className='wa-board-chip';chip.textContent=label+' · '+count;boardSummary.appendChild(chip);
-          column.querySelector('h2').textContent=label.replace(/ · \\d+$/,'')+' · '+count;
+          column.querySelector('h2').textContent=label.replace(/ · \d+$/,'')+' · '+count;
         });
         clientes.forEach(c => {
           const col = document.querySelector(`[data-etiqueta="${c.archivado ? 'archivado' : c.etiqueta}"]`);
