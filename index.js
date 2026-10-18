@@ -385,9 +385,27 @@ app.delete("/tenants/:tenantId/whatsapp/:cuentaId/seguimientos/:id",tenantAccess
   try{const rows=await db.query("DELETE FROM crm_tenant_seguimientos WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Seguimiento inexistente"});res.json({ok:true})}
   catch(e){res.status(500).json({error:"No se pudo eliminar seguimiento"})}
 });
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/media/:messageId",tenantAccess,async(req,res)=>{
+  try{
+    const rows=await db.query("SELECT media_path,media_mime,media_nombre FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.messageId]);
+    if(!rows.length||!rows[0].media_path)return res.status(404).json({error:"Archivo inexistente"});
+    const media=rows[0];
+    if(!/^[a-f0-9-]{36}$/.test(media.media_path))return res.status(404).end();
+    const file=path.join(path.resolve(process.env.SESSION_DIR||"session"),"tenants",String(req.tenantAccount.tenant_id),String(req.tenantAccount.id),"media",media.media_path);
+    if(!fs.existsSync(file))return res.status(404).json({error:"Archivo no disponible"});
+    res.setHeader("Cache-Control","private, no-store");
+    res.setHeader("X-Content-Type-Options","nosniff");
+    res.setHeader("Content-Security-Policy","default-src 'none'; sandbox");
+    const mime=String(media.media_mime||"application/octet-stream");
+    const safeMime=/^(image\/(jpeg|png|webp)|video\/mp4|audio\/(ogg|mpeg|mp4))$/.test(mime)?mime:"application/octet-stream";
+    res.type(safeMime);
+    if(safeMime==="application/octet-stream")res.setHeader("Content-Disposition","attachment");
+    res.sendFile(file);
+  }catch(e){console.error("Tenant media:",e);res.status(500).json({error:"No se pudo abrir el archivo"})}
+});
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/mensajes",tenantAccess,async(req,res)=>{
   const numero=String(req.query.numero||"");if(!numero)return res.status(400).json({error:"Número requerido"});
-  try{res.json(await db.query("SELECT id,numero,texto,direccion,fecha FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3 ORDER BY id DESC LIMIT 200",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]))}
+  try{res.json(await db.query("SELECT id,numero,texto,direccion,fecha,media_mime,media_nombre,(media_path IS NOT NULL) AS tiene_media FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3 ORDER BY id DESC LIMIT 200",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]))}
   catch(e){res.status(500).json({error:"No se pudieron consultar los mensajes"})}
 });
 app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,res)=>{
