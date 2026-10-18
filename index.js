@@ -398,6 +398,17 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,r
     res.json({ok:true});
   }catch(e){res.status(503).json({error:e.message})}
 });
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar-media",tenantAccess,async(req,res)=>{
+ const numero=String(req.body?.numero||""),kind=String(req.body?.kind||""),mimeType=String(req.body?.mimeType||""),fileName=String(req.body?.fileName||"").slice(0,150),caption=String(req.body?.caption||"").slice(0,1024),data=String(req.body?.data||"");
+ const mimeAllowed={image:["image/jpeg","image/png","image/webp"],video:["video/mp4"],audio:["audio/ogg","audio/mpeg","audio/mp4"],document:["application/pdf","text/plain","application/vnd.openxmlformats-officedocument.wordprocessingml.document"]};
+ if(!/^[0-9]{5,20}@s\.whatsapp\.net$/.test(numero)||!mimeAllowed[kind]?.includes(mimeType)||!data||data.length>11200000||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data))return res.status(400).json({error:"Archivo, formato o destinatario inválido (máximo 8 MB)"});
+ try{
+   await tenantWA.sendMedia(req.tenantAccount.id,numero,{kind,data,mimeType,fileName,caption});
+   const texto=caption||({image:"🖼️ Imagen",video:"🎥 Video",audio:"🎵 Audio",document:"📄 Documento"})[kind]+(fileName?" "+fileName:"");
+   await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,texto]);
+   res.json({ok:true});
+ }catch(e){console.error("Tenant media send:",e);res.status(503).json({error:"No se pudo enviar el archivo"})}
+});
 app.get("/operadores/yo",(req,res)=>res.json({usuario:req.crmActor,rol:req.crmRole}));
 app.get("/operadores",requireAdmin,async(req,res)=>{
   try{res.json(await db.query("SELECT id,usuario,rol,activo,creado_en FROM crm_operadores ORDER BY id"))}
