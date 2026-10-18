@@ -1059,12 +1059,31 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
     <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
   </section>
-  <section id="wa-admin-panel" aria-label="Administración" hidden>
+  <style>
+#wa-admin-panel .wa-admin-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+#wa-admin-panel .wa-admin-section-head h3{margin:0 0 4px}
+#wa-admin-panel .wa-admin-section-head p{margin:0;color:var(--wa-muted);font-size:13px}
+#wa-tenant-count{color:var(--wa-muted);font-size:13px}
+.wa-tenant-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,370px),1fr));gap:14px}
+.wa-tenant-card{background:var(--wa-card);border:1px solid var(--wa-border);border-radius:14px;padding:16px;min-width:0}
+.wa-tenant-header{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}
+.wa-tenant-header h4{margin:0 0 4px;font-size:17px}
+.wa-tenant-header small{color:var(--wa-muted)}
+.wa-tenant-actions{display:flex;gap:6px;flex-wrap:wrap}
+.wa-tenant-actions button{font-size:12px;padding:7px 10px}
+.wa-tenant-danger{color:#e87575!important}
+.wa-tenant-details{margin-top:12px;border-top:1px solid var(--wa-border);padding-top:12px}
+.wa-tenant-details summary{cursor:pointer;font-weight:600;padding:6px 0}
+.wa-tenant-details select{max-width:100%;margin:8px 0}
+#wa-tenant-inbox select{max-width:100%;margin:4px 8px 8px 0}
+@media(max-width:600px){.wa-tenant-card{padding:12px}.wa-tenant-grid{grid-template-columns:minmax(0,1fr)}}
+</style>
+<section id="wa-admin-panel" aria-label="Administración" hidden>
     <div class="wa-dash-head"><div><h2>Administración</h2><p>Operadores y registro de actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
     <section class="wa-dash-card" id="wa-tenants-card">
-<h3>Empresas y WhatsApp</h3>
+<div class="wa-admin-section-head"><div><h3>Empresas</h3><p>Administrá compañías, accesos y números conectados desde un solo lugar.</p></div><span id="wa-tenant-count"></span></div>
 <form id="wa-tenant-create" style="display:flex;gap:8px;flex-wrap:wrap"><input name="nombre" placeholder="Nombre de empresa" required minlength="2" maxlength="120"><button>Crear empresa</button></form>
-<p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list"></div>
+<p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list" class="wa-tenant-grid"></div>
 <p style="font-size:12px">Las cuentas nuevas usan sesiones independientes. La bandeja principal heredada aún no está aislada por empresa.</p>
 </section>
     <section class="wa-dash-card" id="wa-tenant-inbox"><h3>Bandeja por empresa</h3><select id="wa-inbox-tenant"></select><select id="wa-inbox-account"></select><button id="wa-inbox-reload" type="button">Actualizar</button><div id="wa-inbox-contacts"></div><strong id="wa-inbox-title"></strong><div id="wa-inbox-messages"></div><form id="wa-inbox-send"><input id="wa-inbox-text" required maxlength="4096"><button>Enviar</button></form><p id="wa-inbox-status"></p></section>
@@ -3337,19 +3356,46 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       const list=document.getElementById('wa-tenants-list'),status=document.getElementById('wa-tenants-status');
       try{
         const tenants=await waOperatorRequest('/admin/tenants');list.replaceChildren();waInboxTenants().catch(e=>waInboxStatus.textContent=e.message);
+        document.getElementById('wa-tenant-count').textContent=tenants.length+' empresa(s)';
         for(const tenant of tenants){
-          const section=document.createElement('section');section.className='wa-dash-card';section.style.margin='12px 0';
-          const title=document.createElement('h4');title.textContent=tenant.nombre+' (#'+tenant.id+')';
+          const section=document.createElement('section');section.className='wa-tenant-card';
+          const header=document.createElement('div');header.className='wa-tenant-header';
+          const title=document.createElement('h4');title.textContent=tenant.nombre;
+          const id=document.createElement('small');id.textContent='Empresa #'+tenant.id;
+          const info=document.createElement('div');info.append(title,id);
+          const actions=document.createElement('div');actions.className='wa-tenant-actions';
+          const edit=document.createElement('button');edit.type='button';edit.textContent='Editar nombre';
+          edit.onclick=async()=>{
+            const nombre=prompt('Nuevo nombre de la empresa',tenant.nombre);
+            if(nombre===null||nombre.trim()===tenant.nombre)return;
+            try{await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:nombre.trim()})});await waLoadTenants();status.textContent='Nombre actualizado'}
+            catch(e){status.textContent=e.message}
+          };
+          const remove=document.createElement('button');remove.type='button';remove.textContent='Eliminar';remove.className='wa-tenant-danger';
+          remove.onclick=async()=>{
+            if(!confirm('¿Eliminar la empresa '+tenant.nombre+'? Solo se permite si no tiene cuentas ni mensajes.'))return;
+            try{await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'DELETE'});await waLoadTenants();status.textContent='Empresa eliminada'}
+            catch(e){status.textContent=e.message}
+          };
+          actions.append(edit,remove);header.append(info,actions);
+          const settings=document.createElement('details');settings.className='wa-tenant-details';
+          const summary=document.createElement('summary');summary.textContent='Configuración y accesos';
+          const modeLabel=document.createElement('label');modeLabel.textContent='Visibilidad de WhatsApp';
           const mode=document.createElement('select');
-          for(const [value,label] of [['compartido','Todos los operadores'],['restringido','Solo WhatsApp asignados']]){
+          for(const [value,label] of [['compartido','Compartido entre miembros'],['restringido','Solo cuentas asignadas']]){
             const option=document.createElement('option');option.value=value;option.textContent=label;mode.appendChild(option);
           }
           mode.value=tenant.modo_acceso;
-          mode.onchange=async()=>{try{await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({modo_acceso:mode.value})});status.textContent='Modo actualizado'}catch(e){status.textContent=e.message}};
-          const add=document.createElement('button');add.type='button';add.textContent='Agregar WhatsApp';
+          mode.onchange=async()=>{try{await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({modo_acceso:mode.value})});status.textContent='Permisos actualizados'}catch(e){status.textContent=e.message}};
+          const add=document.createElement('button');add.type='button';add.textContent='+ Agregar WhatsApp';
           add.onclick=async()=>{const nombre=prompt('Nombre de la cuenta de WhatsApp');if(!nombre)return;try{await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre})});await waLoadTenants()}catch(e){status.textContent=e.message}};
+          settings.append(summary,modeLabel,mode);
+          const permissions=document.createElement('div');settings.append(permissions);
+          const connections=document.createElement('details');connections.className='wa-tenant-details';connections.open=false;
+          const connSummary=document.createElement('summary');connSummary.textContent='Conexiones de WhatsApp';
+          connections.append(connSummary,add);
           const accounts=document.createElement('div');
-          section.append(title,mode,add,accounts);list.appendChild(section);await waLoadTenantPermissions(tenant,section);
+          connections.append(accounts);section.append(header,connections,settings);list.appendChild(section);await waLoadTenantPermissions(tenant,permissions);
           const items=await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas');
           for(const account of items){
             const row=document.createElement('div');row.style.cssText='padding:10px 0;border-top:1px solid var(--wa-border);display:flex;gap:8px;align-items:center;flex-wrap:wrap';
