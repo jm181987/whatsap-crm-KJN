@@ -3373,9 +3373,13 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
           };
           const remove=document.createElement('button');remove.type='button';remove.textContent='Eliminar';remove.className='wa-tenant-danger';
           remove.onclick=async()=>{
-            if(!confirm('¿Eliminar la empresa '+tenant.nombre+'? Solo se permite si no tiene cuentas ni mensajes.'))return;
-            try{await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'DELETE'});await waLoadTenants();status.textContent='Empresa eliminada'}
-            catch(e){status.textContent=e.message}
+            const confirmation=prompt('ATENCIÓN: se eliminarán definitivamente todos los WhatsApp, chats, contactos y accesos de «'+tenant.nombre+'». Para confirmar escribí ELIMINAR:');
+            if(confirmation!=='ELIMINAR')return;
+            try{
+              const result=await waOperatorRequest('/admin/tenants/'+tenant.id,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmacion:'ELIMINAR'})});
+              await waLoadTenants();
+              status.textContent=result.advertencia||'Empresa y todos sus datos eliminados';
+            }catch(e){status.textContent=e.message}
           };
           actions.append(edit,remove);header.append(info,actions);
           const settings=document.createElement('details');settings.className='wa-tenant-details';
