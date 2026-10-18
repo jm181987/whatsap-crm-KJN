@@ -3249,14 +3249,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     const waInboxStatus=document.getElementById('wa-inbox-status');
     const waInboxBase=()=>'/tenants/'+waInboxTenant.value+'/whatsapp/'+waInboxAccount.value;
     async function waInboxTenants(){
-      const tenants=await waOperatorRequest('/admin/tenants');
+      const tenants=await waOperatorRequest('/mis-empresas');
       waInboxTenant.replaceChildren(new Option('Elegir empresa',''));
       tenants.forEach(t=>waInboxTenant.add(new Option(t.nombre,t.id)));
     }
     async function waInboxAccounts(){
       waInboxAccount.replaceChildren(new Option('Elegir WhatsApp',''));
       if(!waInboxTenant.value)return;
-      const accounts=await waOperatorRequest('/admin/tenants/'+waInboxTenant.value+'/cuentas');
+      const accounts=await waOperatorRequest('/mis-empresas/'+waInboxTenant.value+'/cuentas');
       accounts.forEach(a=>waInboxAccount.add(new Option(a.nombre,a.id)));
     }
     async function waInboxMessages(){
@@ -3294,6 +3294,45 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         document.getElementById('wa-inbox-text').value='';await waInboxMessages();
       }catch(err){waInboxStatus.textContent=err.message}
     };
+    async function waLoadTenantPermissions(tenant,container){
+      const members=await waOperatorRequest('/admin/tenants/'+tenant.id+'/miembros');
+      const accounts=await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas');
+      const assigned=await waOperatorRequest('/admin/tenants/'+tenant.id+'/asignaciones');
+      const users=await waOperatorRequest('/operadores');
+      const heading=document.createElement('h4');heading.textContent='Usuarios y permisos';
+      const userSelect=document.createElement('select');
+      for(const u of users){const option=new Option(u.usuario,u.usuario);userSelect.add(option)}
+      const role=document.createElement('select');
+      role.add(new Option('Operador','operador'));role.add(new Option('Administrador de empresa','admin'));
+      const add=document.createElement('button');add.type='button';add.textContent='Agregar usuario';
+      add.onclick=async()=>{
+        try{await waOperatorRequest('/admin/tenants/'+tenant.id+'/miembros',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:userSelect.value,rol:role.value})});await waLoadTenants()}
+        catch(e){document.getElementById('wa-tenants-status').textContent=e.message}
+      };
+      container.append(heading,userSelect,role,add);
+      for(const m of members){
+        if(!m.activo)continue;
+        const line=document.createElement('div');line.style.cssText='padding:8px;border-top:1px solid #8884';
+        const name=document.createElement('strong');name.textContent=m.usuario+' ('+m.rol+') ';
+        const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Quitar de empresa';
+        revoke.onclick=async()=>{if(!confirm('¿Revocar acceso a '+m.usuario+'?'))return;try{await waOperatorRequest('/admin/tenants/'+tenant.id+'/miembros/'+encodeURIComponent(m.usuario),{method:'DELETE'});await waLoadTenants()}catch(e){document.getElementById('wa-tenants-status').textContent=e.message}};
+        line.append(name,revoke);
+        for(const account of accounts){
+          const label=document.createElement('label');label.style.cssText='display:inline-flex;align-items:center;gap:4px;margin:6px';
+          const check=document.createElement('input');check.type='checkbox';check.checked=assigned.some(a=>Number(a.cuenta_id)===Number(account.id)&&a.usuario===m.usuario);
+          check.disabled=m.rol==='admin';
+          check.onchange=async()=>{
+            try{
+              const url='/admin/tenants/'+tenant.id+'/asignaciones';
+              if(check.checked)await waOperatorRequest(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuenta_id:account.id,usuario:m.usuario})});
+              else await waOperatorRequest(url+'/'+account.id+'/'+encodeURIComponent(m.usuario),{method:'DELETE'});
+            }catch(e){check.checked=!check.checked;document.getElementById('wa-tenants-status').textContent=e.message}
+          };
+          label.append(check,document.createTextNode(account.nombre));line.append(label);
+        }
+        container.append(line);
+      }
+    }
     async function waLoadTenants(){
       const list=document.getElementById('wa-tenants-list'),status=document.getElementById('wa-tenants-status');
       try{
@@ -3310,7 +3349,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
           const add=document.createElement('button');add.type='button';add.textContent='Agregar WhatsApp';
           add.onclick=async()=>{const nombre=prompt('Nombre de la cuenta de WhatsApp');if(!nombre)return;try{await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre})});await waLoadTenants()}catch(e){status.textContent=e.message}};
           const accounts=document.createElement('div');
-          section.append(title,mode,add,accounts);list.appendChild(section);
+          section.append(title,mode,add,accounts);list.appendChild(section);await waLoadTenantPermissions(tenant,section);
           const items=await waOperatorRequest('/admin/tenants/'+tenant.id+'/cuentas');
           for(const account of items){
             const row=document.createElement('div');row.style.cssText='padding:10px 0;border-top:1px solid var(--wa-border);display:flex;gap:8px;align-items:center;flex-wrap:wrap';
