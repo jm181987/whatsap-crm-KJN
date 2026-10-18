@@ -876,6 +876,8 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #wa-profile-form button{background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:9px;cursor:pointer}
 @media(max-width:700px){#wa-dashboard{padding:12px!important}.wa-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}.wa-dash-grid{grid-template-columns:minmax(0,1fr)!important}#wa-contact-panel{max-width:min(100vw,360px)!important;flex-basis:min(100vw,360px)!important}.wa-dash-card{min-width:0;overflow-wrap:anywhere}#enviar-area{flex-wrap:wrap}#wa-ai-suggest{font-size:12px}}
 #wa-ai-suggest{border-radius:8px;border:1px solid var(--wa-border);background:var(--wa-card);color:var(--wa-text);padding:8px;cursor:pointer}
+#wa-audit-refresh{background:var(--wa-card);color:var(--wa-text);border:1px solid var(--wa-border);border-radius:8px;padding:8px;cursor:pointer}
+.wa-audit-row{padding:9px 2px;border-top:1px solid var(--wa-border);font-size:12px;overflow-wrap:anywhere}
   </style>
 </head>
 <body>
@@ -1043,6 +1045,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     </div>
     <p id="wa-pipeline-error" role="status" style="color:var(--wa-muted);font-size:12px"></p>
     <section class="wa-dash-card" id="wa-followups"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3>Agenda de seguimientos</h3><button type="button" id="wa-followups-refresh">Actualizar</button></div><p id="wa-followups-status" role="status"></p><div id="wa-followups-list"></div></section>
+    <section class="wa-dash-card" id="wa-audit-card" style="margin:14px 0"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Actividad administrativa reciente</h3><button type="button" id="wa-audit-refresh">Actualizar</button></div><p id="wa-audit-status" role="status" style="font-size:12px;color:var(--wa-muted)"></p><div id="wa-audit-list" style="max-height:260px;overflow:auto"></div></section>
     <div class="wa-dash-grid"><div class="wa-dash-card"><h3>Mensajes por día</h3><div id="wa-dash-bars" class="wa-bars"></div></div>
     <div class="wa-dash-card"><h3>Conversaciones pendientes</h3><div id="wa-dash-pending"></div></div></div>
     <p style="font-size:12px;color:var(--wa-muted);margin-top:20px">Las llamadas no tienen duración disponible en la integración actual de WhatsApp.</p>
@@ -3139,6 +3142,26 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     }
     document.getElementById('wa-followups-refresh').onclick=loadFollowups;
     document.getElementById('wa-nav-dash').addEventListener('click',loadFollowups);
+    async function loadAuditActivity(){
+      const status=document.getElementById('wa-audit-status');
+      const list=document.getElementById('wa-audit-list');
+      list.replaceChildren();status.textContent='Cargando...';
+      try{
+        const response=await fetch('/auditoria/reciente',{cache:'no-store'});
+        if(!response.ok)throw Error('No se pudo consultar la actividad');
+        const rows=await response.json();
+        status.textContent=rows.length+' operaciones recientes';
+        for(const item of rows){
+          const row=document.createElement('div');row.className='wa-audit-row';
+          const date=new Date(item.fecha);
+          row.textContent=(Number.isNaN(date.getTime())?'':date.toLocaleString('es-UY')+' · ')+item.actor+' · '+item.accion+' '+item.recurso+' · HTTP '+item.resultado;
+          list.appendChild(row);
+        }
+      }catch(err){status.textContent=err.message}
+    }
+    document.getElementById('wa-audit-refresh').onclick=loadAuditActivity;
+    document.getElementById('wa-nav-dash').addEventListener('click',loadAuditActivity);
+
 
     const waProfileForm=document.getElementById('wa-profile-form');
     async function waLoadProfile(numero){
