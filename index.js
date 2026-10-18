@@ -51,6 +51,18 @@ async function verifyPassword(password,stored){
 const sessionCookieName="knj_crm_session";
 const digestSession=token=>createHash("sha256").update(token).digest("hex");
 app.use(express.json({limit:"1mb"}));
+app.use((req,res,next)=>{
+  if(!["POST","PUT","PATCH","DELETE"].includes(req.method))return next();
+  const origin=req.get("origin");
+  if(!origin)return next();
+  try{
+    const expected=new URL((req.socket.encrypted?"https":"http")+"://"+req.get("host"));
+    const supplied=new URL(origin);
+    if(supplied.host===expected.host&&["http:","https:"].includes(supplied.protocol))return next();
+  }catch{}
+  return res.status(403).json({error:"Origen no permitido"});
+});
+
 app.post("/auth/login",async(req,res)=>{
   const usuario=String(req.body?.usuario||"");
   const password=String(req.body?.password||"");
@@ -168,6 +180,9 @@ app.patch("/operadores/:id",requireAdmin,async(req,res)=>{
     const hash=password===undefined?null:await passwordHash(password);
     const rows=await db.query("UPDATE crm_operadores SET rol=COALESCE($2,rol),activo=COALESCE($3,activo),password_hash=COALESCE($4,password_hash) WHERE id=$1 RETURNING id,usuario,rol,activo",[id,rol??null,activo??null,hash]);
     if(!rows.length)return res.status(404).json({error:"Operador no encontrado"});
+    if(activo===false||password!==undefined){
+      await db.query("DELETE FROM crm_sesiones WHERE usuario=$1",[rows[0].usuario]);
+    }
     res.json(rows[0]);
   }catch(err){console.error(err);res.status(500).json({error:"No se pudo actualizar el operador"})}
 });
@@ -2043,7 +2058,7 @@ app.post("/enviar-masivo-estado", async (req, res) => {
 });
 
 // Exportar CSV
-app.get("/exportar", (req, res) => {
+app.get("/exportar", requireAdmin, (req, res) => {
   db.all("SELECT * FROM clientes ORDER BY ultima_interaccion DESC", (err, rows) => {
     if (err) {
       console.error("Error exportando CSV:", err);
