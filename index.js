@@ -770,7 +770,7 @@ async function iniciarWhatsApp() {
     sock = makeWASocket({
       version,
       auth: state,
-      printQRInTerminal: true,
+      printQRInTerminal: false,
       browser: ["Chrome", "Windows", "10.0"],
       syncFullHistory: false,
       markOnlineOnConnect: true,
@@ -903,7 +903,7 @@ function configurarManejoMensajes() {
       
       // Ignorar mensajes propios y estados
       if (msg.key.fromMe || !msg.message || msg.key.remoteJid === "status@broadcast") continue;
-      if (msg.message.protocolMessage || msg.message.senderKeyDistributionMessage || msg.message.messageContextInfo || msg.message.reactionMessage) continue;
+      if (msg.message.protocolMessage || msg.message.senderKeyDistributionMessage || msg.message.reactionMessage) continue;
 
       // WhatsApp may wrap incoming media in ephemeral/view-once containers.
       const wrapped = msg.message.ephemeralMessage?.message
