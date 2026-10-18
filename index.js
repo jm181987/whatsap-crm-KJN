@@ -1042,6 +1042,28 @@ app.delete("/recordatorios/:id", (req, res) => {
   });
 });
 
+// Agenda de seguimiento: pendientes y vencidos, sin envío automático.
+app.get("/seguimientos/pendientes",async(req,res)=>{
+  try{
+    const rows=await db.query(`SELECT r.id,r.numero,r.fecha_recordatorio,r.mensaje,
+      COALESCE(NULLIF(c.nombre,''),r.numero) AS nombre
+      FROM recordatorios r LEFT JOIN clientes c ON c.numero=r.numero
+      WHERE COALESCE(r.activo,1)=1 AND COALESCE(r.completado,0)=0
+      ORDER BY r.fecha_recordatorio ASC LIMIT 100`);
+    res.setHeader("Cache-Control","no-store");
+    res.json(rows);
+  }catch(err){console.error("Error agenda seguimientos:",err);res.status(500).json({error:"No se pudo cargar la agenda"})}
+});
+app.post("/seguimientos/:id/completar",async(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({error:"Identificador inválido"});
+  try{
+    const rows=await db.query("UPDATE recordatorios SET completado=1,activo=0 WHERE id=$1 RETURNING id",[id]);
+    if(!rows.length)return res.status(404).json({error:"Recordatorio no encontrado"});
+    res.json({ok:true});
+  }catch(err){console.error("Error completando seguimiento:",err);res.status(500).json({error:"No se pudo completar"})}
+});
+
 // Obtener recordatorios próximos (para notificaciones)
 app.get("/recordatorios-proximos", (req, res) => {
   const ahora = new Date().toISOString();
