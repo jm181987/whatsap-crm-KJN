@@ -50,6 +50,9 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+// Ruta principal explícita para comprobar que el CRM sirve su interfaz.
+app.get("/", (req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
+app.get("/health", (req,res)=>res.status(200).json({ok:true,service:"knj-whatsapp-crm"}));
 
 // Crear directorios necesarios si no existen
 const directories = ['public', 'public/audios', 'public/imagenes', 'public/archivos', 'public/videos', process.env.SESSION_DIR || 'session'];
