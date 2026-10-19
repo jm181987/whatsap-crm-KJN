@@ -1196,7 +1196,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <p id="wa-tenants-status" role="status"></p><div id="wa-tenants-list" class="wa-tenant-grid"></div>
 <p style="font-size:12px;color:var(--wa-muted)">Cada empresa tiene su propia conexión y sus chats se consultan en <strong>Bandeja por empresa</strong>, seleccionando la empresa y el número de WhatsApp. La bandeja principal muestra únicamente la conexión original; no combina conversaciones de las otras empresas.</p>
 </section>
-    <section class="wa-dash-card" id="wa-tenant-inbox"><div class="wa-company-heading"><div><h3>Bandeja de conversaciones</h3><p>Atención de WhatsApp por empresa, con historial y herramientas independientes.</p></div><span class="wa-company-tag">CRM · Empresas</span></div><div class="wa-company-switcher"><label>Empresa<select id="wa-inbox-tenant"></select></label><label>Cuenta de WhatsApp<select id="wa-inbox-account"></select></label><button id="wa-inbox-reload" type="button">↻ Actualizar</button></div><div class="wa-company-mobile-tabs" role="group" aria-label="Secciones de bandeja"><button type="button" data-view="contactos" aria-selected="true">Contactos</button><button type="button" data-view="chats" aria-selected="false">Chats</button><button type="button" data-view="herramientas" aria-selected="false">Herramientas</button></div><div class="wa-company-layout" data-mobile-view="contactos"><aside class="wa-company-sidebar"><div class="wa-company-sidebar-head"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>Conversaciones</strong><button type="button" id="wa-inbox-add-contact" title="Agendar contacto">+ Contacto</button></div><input id="wa-inbox-search" type="search" placeholder="Buscar contacto…" aria-label="Buscar conversaciones"></div><form id="wa-inbox-contact-create" hidden style="padding:10px;gap:6px"><input name="nombre" placeholder="Nombre" maxlength="120" required><input name="telefono" placeholder="Teléfono con código de país" inputmode="tel" required><button>Guardar contacto</button><span id="wa-inbox-create-status" role="status"></span></form><div id="wa-inbox-contacts"></div></aside><div class="wa-company-main"><div class="wa-company-chat-head"><span class="wa-company-avatar">✦</span><strong id="wa-inbox-title">Seleccioná una conversación</strong></div>
+    <section class="wa-dash-card" id="wa-tenant-inbox"><div class="wa-company-heading"><div><h3>Bandeja de conversaciones</h3><p>Atención de WhatsApp por empresa, con historial y herramientas independientes.</p></div><span class="wa-company-tag">CRM · Empresas</span></div><div class="wa-company-switcher"><label>Empresa<select id="wa-inbox-tenant"></select></label><label>Cuenta de WhatsApp<select id="wa-inbox-account"></select></label><button id="wa-inbox-reload" type="button">↻ Actualizar</button></div><div class="wa-company-mobile-tabs" role="group" aria-label="Secciones de bandeja"><button type="button" data-view="contactos" aria-selected="true">Contactos</button><button type="button" data-view="chats" aria-selected="false">Chats</button><button type="button" data-view="herramientas" aria-selected="false">Herramientas</button></div><div class="wa-company-layout" data-mobile-view="contactos"><aside class="wa-company-sidebar"><div class="wa-company-sidebar-head"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>Conversaciones</strong><button type="button" id="wa-inbox-add-contact" title="Agendar contacto">+ Contacto</button></div><input id="wa-inbox-search" type="search" placeholder="Buscar contacto…" aria-label="Buscar conversaciones"></div><form id="wa-inbox-contact-create" hidden style="padding:10px;gap:6px"><input name="nombre" placeholder="Nombre" maxlength="120" required><input name="telefono" placeholder="Teléfono con código de país" inputmode="tel" required><button>Guardar contacto</button><span id="wa-inbox-create-status" role="status"></span></form><div id="wa-inbox-contacts"></div></aside><div class="wa-company-main"><div class="wa-company-chat-head"><span class="wa-company-avatar">✦</span><strong id="wa-inbox-title">KNJ Conversaciones</strong><button id="wa-inbox-close" type="button" title="Cerrar conversación" aria-label="Cerrar conversación" style="margin-left:auto">×</button></div><div id="wa-inbox-empty" style="padding:36px 16px;text-align:center"><strong>KNJ Conversaciones</strong><p>Elegí un contacto para ver los mensajes y responder desde el CRM.</p></div>
 <div id="wa-inbox-contact-tools" hidden>
 <label>Estado <select id="wa-inbox-label"><option value="nuevo">Nuevo</option><option value="callback">Callback</option><option value="analista">Analista</option><option value="cerrado">Cerrado</option></select></label>
 <label>Nota <textarea id="wa-inbox-note" rows="2" placeholder="Notas internas de este contacto"></textarea></label>
@@ -1637,10 +1637,13 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 
     // Cerrar chat
     cerrarChatBtn.onclick = () => {
-      document.getElementById('chat').style.display = 'none';
-      if (clienteActual && !textoInput.value.trim()) {
-        marcarIndicador(clienteActual.numero, false);
-      }
+      const previous=clienteActual;
+      clienteActual=null;
+      document.getElementById('chat').style.display='none';
+      document.getElementById('chat-header').textContent='';
+      document.getElementById('mensajes').replaceChildren();
+      if(previous&&!textoInput.value.trim())marcarIndicador(previous.numero,false);
+      waSyncEmptyChat();
     };
 
     // Función para cargar mensajes
@@ -3150,10 +3153,16 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     // Keep the empty state synchronized with the active chat.
     const waEmpty = document.getElementById('wa-empty');
     const waChat = document.getElementById('chat');
-    const waObserver = new MutationObserver(() => {
-      waEmpty.style.display = getComputedStyle(waChat).display === 'none' ? '' : 'none';
+    function waSyncEmptyChat(){
+      const active=waChat.style.display==='flex'&&!!clienteActual;
+      waChat.style.display=active?'flex':'none';
+      waEmpty.style.display=active?'none':'flex';
+    }
+    const waObserver=new MutationObserver(()=>{
+      waEmpty.style.display=waChat.style.display==='flex'&&clienteActual?'none':'flex';
     });
-    waObserver.observe(waChat, { attributes:true, attributeFilter:['style'] });
+    waObserver.observe(waChat,{attributes:true,attributeFilter:['style']});
+    waSyncEmptyChat();
 
     // Workspace navigation, native CRM contact details and operational dashboard.
     const waDashboard = document.getElementById('wa-dashboard');
@@ -3641,8 +3650,24 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         waInboxStatus.textContent='Contacto guardado';
       }catch(e){waInboxStatus.textContent=e.message}
     };
+    function waSyncCompanyChat(){
+      const selected=!!waInboxNumber;
+      document.getElementById('wa-inbox-empty').hidden=selected;
+      document.getElementById('wa-inbox-messages').hidden=!selected;
+      document.getElementById('wa-inbox-send').hidden=!selected;
+      document.getElementById('wa-inbox-close').hidden=!selected;
+      if(!selected)document.getElementById('wa-inbox-title').textContent='KNJ Conversaciones';
+    }
+    document.getElementById('wa-inbox-close').onclick=()=>{
+      waInboxNumber='';waInboxSelectedContact=null;
+      document.getElementById('wa-inbox-contact-tools').hidden=true;
+      document.getElementById('wa-inbox-messages').replaceChildren();
+      document.querySelectorAll('#wa-inbox-contacts .wa-inbox-selected').forEach(el=>el.classList.remove('wa-inbox-selected'));
+      waSyncCompanyChat();
+    };
+    waSyncCompanyChat();
     async function waInboxContacts(){
-      waInboxNumber='';waInboxSelectedContact=null;document.getElementById('wa-inbox-contact-tools').hidden=true;document.getElementById('wa-inbox-title').textContent='';
+      waInboxNumber='';waInboxSelectedContact=null;document.getElementById('wa-inbox-contact-tools').hidden=true;waSyncCompanyChat();
       document.getElementById('wa-inbox-messages').replaceChildren();
       const box=document.getElementById('wa-inbox-contacts');box.replaceChildren();
       if(!waInboxTenant.value||!waInboxAccount.value)return;
