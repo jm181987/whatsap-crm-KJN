@@ -275,7 +275,9 @@ async function iniciarCuentasDeEmpresas(){
   try{
     const accounts=await db.query("SELECT c.id,c.tenant_id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id WHERE t.activo=TRUE ORDER BY c.id");
     for(const account of accounts){
-      try{await tenantWA.start(account);console.log("Tenant WhatsApp iniciado:",account.tenant_id,account.id)}
+      const dir=path.join(path.resolve(process.env.SESSION_DIR||"session"),"tenants",String(account.tenant_id),String(account.id));
+      if(!fs.existsSync(path.join(dir,"creds.json")))continue;
+      try{await tenantWA.start(account);console.log("Restaurando WhatsApp empresa:",account.tenant_id,account.id)}
       catch(error){console.error("Tenant WhatsApp no iniciado:",account.tenant_id,account.id,error)}
     }
   }catch(error){console.error("No se pudieron restaurar las cuentas de empresas:",error)}
@@ -2905,15 +2907,7 @@ server.listen(Number(process.env.PORT || 3000), () => {
   console.log("📊 Dashboard en tiempo real activo"); // 👈 NUEVA LÍNEA
   iniciarWhatsApp();
   iniciarCuentasDeEmpresas().catch(error=>console.error("Tenant startup:",error));
-  db.query("SELECT c.id,c.tenant_id,c.nombre FROM crm_whatsapp_cuentas c JOIN crm_tenants t ON t.id=c.tenant_id WHERE t.activo=TRUE ORDER BY c.id")
-    .then(async accounts=>{
-      for(const account of accounts){
-        const dir=path.join(path.resolve(process.env.SESSION_DIR||"session"),"tenants",String(account.tenant_id),String(account.id));
-        if(!fs.existsSync(path.join(dir,"creds.json")))continue;
-        try{await tenantWA.start(account);console.log("Restaurando WhatsApp empresa:",account.tenant_id,account.id)}
-        catch(err){console.error("Error restaurando WhatsApp empresa:",account.id,err)}
-      }
-    }).catch(err=>console.error("Error cargando conexiones empresariales:",err));
+
 
 });
 
