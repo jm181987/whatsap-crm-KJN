@@ -193,6 +193,8 @@ app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
       await query("DELETE FROM crm_tenant_mensajes WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_seguimientos WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_automatizaciones_envios WHERE regla_id IN (SELECT id FROM crm_tenant_automatizaciones WHERE tenant_id=$1)",[id]);
+      await query("DELETE FROM crm_tenant_automatizaciones WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_respuestas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_contactos WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
@@ -378,6 +380,41 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/informes/conversaciones",tenantAc
     const daily=await db.query("SELECT TO_CHAR(fecha AT TIME ZONE 'UTC','YYYY-MM-DD') AS dia,COUNT(*)::int AS mensajes,COUNT(DISTINCT numero)::int AS conversaciones,COUNT(*) FILTER (WHERE direccion='recibido')::int AS recibidos,COUNT(*) FILTER (WHERE direccion='enviado')::int AS enviados FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND fecha >= NOW()-($3::int * INTERVAL '1 day') GROUP BY 1 ORDER BY 1",[t,c,dias]);
     res.json({daily,pending:[],dias,scope:{tenant_id:t,cuenta_id:c}});
   }catch(e){console.error("Tenant activity report:",e);res.status(500).json({error:"No se pudo generar el informe de la empresa"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/automatizaciones",tenantAccess,async(req,res)=>{
+  try{res.json(await db.query("SELECT id,palabra,respuesta,activo,creado_en FROM crm_tenant_automatizaciones WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY id DESC",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  catch(e){res.status(500).json({error:"No se pudieron cargar automatizaciones"})}
+});
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/automatizaciones",tenantAccess,async(req,res)=>{
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Solo administrador de empresa"});
+  const palabra=String(req.body?.palabra||"").trim().toLocaleLowerCase(),respuesta=String(req.body?.respuesta||"").trim();
+  if(palabra.length<2||palabra.length>100||respuesta.length<1||respuesta.length>4096)return res.status(400).json({error:"Regla inválida"});
+  try{res.status(201).json((await db.query("INSERT INTO crm_tenant_automatizaciones(tenant_id,cuenta_id,palabra,respuesta) VALUES($1,$2,$3,$4) RETURNING id,palabra,respuesta,activo",[req.tenantAccount.tenant_id,req.tenantAccount.id,palabra,respuesta]))[0])}
+  catch(e){res.status(500).json({error:"No se pudo crear regla"})}
+});
+app.patch("/tenants/:tenantId/whatsapp/:cuentaId/automatizaciones/:id",tenantAccess,async(req,res)=>{
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Solo administrador de empresa"});
+  if(typeof req.body?.activo!=="boolean")return res.status(400).json({error:"Estado inválido"});
+  try{const rows=await db.query("UPDATE crm_tenant_automatizaciones SET activo=$4 WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id,activo",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id,req.body.activo]);if(!rows.length)return res.status(404).json({error:"Regla inexistente"});res.json(rows[0])}
+  catch(e){res.status(500).json({error:"No se pudo actualizar regla"})}
+});
+app.delete("/tenants/:tenantId/whatsapp/:cuentaId/automatizaciones/:id",tenantAccess,async(req,res)=>{
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Solo administrador de empresa"});
+  try{const rows=await db.query("DELETE FROM crm_tenant_automatizaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND id=$3 RETURNING id",[req.tenantAccount.tenant_id,req.tenantAccount.id,req.params.id]);if(!rows.length)return res.status(404).json({error:"Regla inexistente"});res.json({ok:true})}
+  catch(e){res.status(500).json({error:"No se pudo eliminar regla"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/reporte-avanzado",tenantAccess,async(req,res)=>{
+  const desde=String(req.query.desde||""),hasta=String(req.query.hasta||"");
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(desde)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(hasta)||desde>hasta||!Number.isFinite(Date.parse(desde))||!Number.isFinite(Date.parse(hasta)))return res.status(400).json({error:"Fechas inválidas"});
+  const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
+  try{
+    const [diario,contactos,estados]=await Promise.all([
+      db.query("SELECT TO_CHAR(fecha AT TIME ZONE 'UTC','YYYY-MM-DD') AS dia,COUNT(*) FILTER(WHERE direccion='recibido')::int AS recibidos,COUNT(*) FILTER(WHERE direccion='enviado')::int AS enviados,COUNT(DISTINCT numero)::int AS conversaciones FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND fecha >= $3::date AND fecha < ($4::date + INTERVAL '1 day') GROUP BY 1 ORDER BY 1",[t,c,desde,hasta]),
+      db.query("SELECT numero,COUNT(*)::int AS mensajes,MAX(fecha) AS ultima_actividad FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND fecha >= $3::date AND fecha < ($4::date + INTERVAL '1 day') GROUP BY numero ORDER BY mensajes DESC LIMIT 20",[t,c,desde,hasta]),
+      db.query("SELECT etiqueta,COUNT(*)::int AS total FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 GROUP BY etiqueta ORDER BY total DESC",[t,c])
+    ]);
+    res.json({desde,hasta,diario,contactos,estados});
+  }catch(e){console.error("Advanced tenant report:",e);res.status(500).json({error:"No se pudo generar reporte"})}
 });
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard",tenantAccess,async(req,res)=>{
   const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
