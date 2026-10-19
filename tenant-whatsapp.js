@@ -106,6 +106,21 @@ export function createTenantWhatsApp(db) {
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
               await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre,wa_message_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null,msg.key?.id||null]);
+              if(msg.key?.id&&event.type==="notify"&&numero.endsWith("@s.whatsapp.net")&&!media){
+                try{
+                  const rules=await db.query("SELECT id,palabra,respuesta FROM crm_tenant_automatizaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND activo=TRUE ORDER BY id LIMIT 20",[account.tenant_id,key]);
+                  const normalized=texto.trim().toLocaleLowerCase();
+                  for(const rule of rules){
+                    if(normalized!==rule.palabra.toLocaleLowerCase())continue;
+                    const claimed=await db.query("INSERT INTO crm_tenant_automatizaciones_envios(regla_id,wa_message_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING regla_id",[rule.id,msg.key.id]);
+                    if(!claimed.length)break;
+                    if(item.status!=="conectado"||item.socket!==socket)break;
+                    await socket.sendMessage(numero,{text:rule.respuesta});
+                    await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[account.tenant_id,key,numero,rule.respuesta]);
+                    break;
+                  }
+                }catch(err){console.error("Tenant automation:",key,err)}
+              }
               console.log("✅ Tenant mensaje persistido:",account.tenant_id,key,msg.key?.id,mediaPath?"multimedia":"texto");
             }catch(e){console.error("Tenant message persistence:",e)}
             }catch(e){console.error("Tenant incoming message error:",key,msg?.key?.id,e)}
