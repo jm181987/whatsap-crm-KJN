@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadContentFromMessage, downloadMediaMessage } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadContentFromMessage } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
 import { randomUUID } from "node:crypto";
 
@@ -100,7 +100,7 @@ export function createTenantWhatsApp(db) {
               mediaMime=String(media.mimetype||"application/octet-stream").split(";")[0];
               mediaNombre=String(media.fileName||kind).slice(0,150);
               try{
-                const stream=await downloadContentFromMessage(media,kind,{logger:socket.logger,reuploadRequest:socket.updateMediaMessage?.bind(socket)});
+                const stream=await downloadContentFromMessage(media,kind);
                 const chunks=[];let size=0;
                 for await(const chunk of stream){
                   size+=chunk.length;
