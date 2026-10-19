@@ -17,6 +17,10 @@
 - Acceder a una **bandeja por empresa** y cambiar entre cuentas autorizadas.
 - Gestionar contactos, estados, notas, archivado, recordatorios y seguimientos por empresa.
 - Consultar indicadores por cuenta y conteos de contactos por estado.
+- Gestionar respuestas rápidas por cuenta, exportaciones CSV e informes de conversaciones.
+- Enviar y consultar adjuntos de imagen, video, audio y documentos en la bandeja de empresa, sujetos a los formatos y límites admitidos.
+- Ejecutar envíos de texto a un máximo de 20 contactos por operación, con confirmación de consentimiento y permisos de administrador de empresa.
+- Previsualizar e importar registros heredados a una cuenta elegida por el administrador global; los registros antiguos no incluyen una empresa de origen verificable.
 - Administrar operadores y revisar funciones de administración.
 
 ### Estado funcional
@@ -28,11 +32,13 @@
 | Contactos, notas, estados y archivado por cuenta | Implementados |
 | Recordatorios y seguimientos por cuenta | Implementados |
 | Indicadores y conteos de Kanban por cuenta | Implementados |
-| Bandeja principal y módulos históricos | **No completamente migrados a multiempresa** |
-| Kanban visual integral por empresa | Pendiente de completar |
-| Multimedia entrante/saliente por empresa | Pendiente de completar y probar |
-| Envíos masivos, automatizaciones y reportes multiempresa | Pendientes de completar |
-| Importación de datos heredados a empresas | Pendiente |
+| Bandeja principal y módulos históricos | **Siguen siendo heredados y no están completamente migrados** |
+| Kanban por empresa | Estados y conteos implementados; tablero visual integral pendiente |
+| Multimedia entrante/saliente por empresa | Rutas y almacenamiento implementados; requiere pruebas reales de cifrado, recepción y reproducción |
+| Envío masivo de texto por empresa | Implementado con límite de 20 destinatarios y confirmación de consentimiento; pendiente de validar | 
+| Respuestas rápidas, CSV e informes por cuenta | Rutas implementadas; pendiente de validar funcionalidad integral |
+| Automatizaciones y reportes avanzados | Pendientes de completar |
+| Importación de datos heredados a empresas | Vista previa e importación manual implementadas; verificar titularidad y respaldar antes |
 
 **Importante:** las rutas heredadas están restringidas para determinados usuarios de empresas para evitar exponer datos de la conexión principal. No deben desbloquearse sin controles de acceso por empresa y cuenta.
 
@@ -123,6 +129,14 @@ La empresa y la cuenta seleccionadas determinan el alcance de los endpoints nuev
 
 **Atención:** las funcionalidades antiguas que siguen usando tablas globales no adquieren aislamiento multiempresa por el simple hecho de elegir una empresa en la interfaz.
 
+### Archivos, medios y mensajes cifrados
+
+Los archivos multimedia recibidos se asocian a la cuenta y se guardan bajo su directorio de sesión, en `tenants/<empresa_id>/<cuenta_id>/media/`. Su descarga pasa por una ruta que valida permisos. El envío multimedia admite un conjunto limitado de formatos y archivos de hasta **8 MB** mediante la API actual. **La presencia de código no garantiza que Baileys pueda descifrar todos los mensajes**: comprobá recepción de texto, imagen, video, audio y documentos con cada cuenta real, incluida una reconexión y un reinicio de Coolify. Reconectar no recupera necesariamente mensajes cifrados antiguos.
+
+### Importación del CRM heredado
+
+La importación de contactos y mensajes históricos requiere autorización del administrador global y confirmación `IMPORTAR`. **No detecta automáticamente a qué empresa pertenecen los datos antiguos.** Antes de ejecutarla, verificá la cuenta destino, hacé una copia de seguridad y revisá la vista previa. No importes los mismos datos indiscriminadamente a varias empresas.
+
 ### Eliminación de empresas
 
 La interfaz requiere escribir **`ELIMINAR`** para confirmar. La operación elimina los datos asociados a esa empresa de las tablas multiempresa implementadas y procura cerrar sus conexiones y borrar los archivos de sesión correspondientes. **Es irreversible**; realizá un respaldo previamente. No elimina mensajes almacenados en los teléfonos de los participantes.
@@ -150,6 +164,14 @@ La interfaz requiere escribir **`ELIMINAR`** para confirmar. La operación elimi
 - Baileys es una integración no oficial de WhatsApp. Su funcionamiento puede cambiar y debe evaluarse frente a las condiciones aplicables del servicio.
 - No realices envíos masivos sin consentimiento ni sin cumplir las políticas pertinentes.
 - Validá migraciones, flujos de medios, reconexiones y restauración de respaldos en un entorno de prueba.
+
+## Limitaciones conocidas y validación
+
+- La bandeja original y algunas funciones antiguas siguen usando datos globales. Las nuevas rutas por empresa no las convierten automáticamente en multiempresa.
+- El aislamiento de contactos, mensajes y permisos de las nuevas rutas debe validarse con **dos empresas y dos usuarios distintos**, intentando acceso cruzado.
+- Las automatizaciones antiguas, el Kanban visual integral y la integración total de la sesión principal aún requieren trabajo.
+- Los medios y las claves de Baileys deben conservarse en un volumen persistente; las reconexiones y la recepción deben probarse después de cada despliegue.
+- Los cambios del repositorio no equivalen a pruebas completadas en Coolify.
 
 ## Contribuciones y mantenimiento
 
