@@ -1107,7 +1107,9 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <button type="button" id="wa-inbox-save-contact">Guardar contacto</button>
 </div>
 <div id="wa-inbox-messages" role="log" aria-live="polite"></div>
-</div><aside class="wa-company-tools"><section id="wa-inbox-analytics" style="margin:12px 0"><h4>Indicadores de esta cuenta</h4><div id="wa-inbox-kpis"></div><div id="wa-inbox-kanban"></div></section>
+</div><aside class="wa-company-tools"><section id="wa-inbox-team"><h4>Responsable de la conversación</h4><select id="wa-inbox-assignee"><option value="">Sin asignar</option></select><button type="button" id="wa-inbox-assign">Asignar</button><p id="wa-inbox-assignment-status"></p></section>
+<section id="wa-inbox-advanced-kpis"><h4>Actividad y carga operativa</h4><select id="wa-inbox-kpi-period"><option value="7d">7 días</option><option value="30d">30 días</option><option value="90d">90 días</option></select><button id="wa-inbox-kpi-refresh" type="button">Actualizar KPI</button><div id="wa-inbox-kpi-output"></div></section>
+<section id="wa-inbox-analytics" style="margin:12px 0"><h4>Indicadores de esta cuenta</h4><div id="wa-inbox-kpis"></div><div id="wa-inbox-kanban"></div></section>
 <details id="wa-inbox-quick-replies"><summary>Respuestas rápidas</summary>
 <form id="wa-inbox-quick-form"><input id="wa-inbox-quick-title" placeholder="Título" maxlength="100" required><textarea id="wa-inbox-quick-text" placeholder="Mensaje" maxlength="4096" required></textarea><button>Guardar respuesta</button></form>
 <div id="wa-inbox-quick-list"></div></details>
@@ -3421,6 +3423,35 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         }
       }catch(err){waInboxStatus.textContent=err.message}
     };
+    let waInboxAssignments=new Map();
+    async function waInboxTeam(){
+      const select=document.getElementById('wa-inbox-assignee');select.replaceChildren(new Option('Sin asignar',''));
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const [members,assignments]=await Promise.all([waOperatorRequest(waInboxBase()+'/operadores'),waOperatorRequest(waInboxBase()+'/asignaciones')]);
+      for(const member of members)select.add(new Option(member.usuario,member.usuario));
+      waInboxAssignments=new Map(assignments.map(a=>[a.numero,a.usuario]));
+      select.value=waInboxAssignments.get(waInboxNumber)||'';
+    }
+    document.getElementById('wa-inbox-assign').onclick=async()=>{
+      if(!waInboxNumber){waInboxStatus.textContent='Elegí una conversación';return}
+      try{
+        await waOperatorRequest(waInboxBase()+'/asignaciones/'+encodeURIComponent(waInboxNumber),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:document.getElementById('wa-inbox-assignee').value})});
+        document.getElementById('wa-inbox-assignment-status').textContent='Asignación guardada';
+        await waInboxTeam();
+      }catch(e){document.getElementById('wa-inbox-assignment-status').textContent=e.message}
+    };
+    async function waInboxAdvancedKpis(){
+      const output=document.getElementById('wa-inbox-kpi-output');output.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const data=await waOperatorRequest(waInboxBase()+'/kpis?periodo='+document.getElementById('wa-inbox-kpi-period').value);
+      for(const day of data.tendencia){
+        const line=document.createElement('p');line.textContent=day.dia+' · Recibidos '+day.recibidos+' · Enviados '+day.enviados+' · Contactos activos '+day.contactos_activos;output.append(line);
+      }
+      const title=document.createElement('strong');title.textContent='Carga por operador';output.append(title);
+      for(const item of data.carga){const line=document.createElement('p');line.textContent=item.usuario+': '+item.conversaciones+' conversaciones asignadas';output.append(line)}
+      for(const item of data.operadores){const line=document.createElement('p');line.textContent=item.operador+': '+item.enviados+' mensajes enviados';output.append(line)}
+    }
+    document.getElementById('wa-inbox-kpi-refresh').onclick=()=>waInboxAdvancedKpis().catch(e=>waInboxStatus.textContent=e.message);
     async function waInboxDashboard(){
       const kpis=document.getElementById('wa-inbox-kpis'),kanban=document.getElementById('wa-inbox-kanban');
       kpis.replaceChildren();kanban.replaceChildren();
@@ -3500,6 +3531,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
           button.textContent=c.nombre||c.numero;button.onclick=async()=>{
             box.querySelectorAll('button').forEach(b=>b.classList.remove('wa-inbox-selected'));button.classList.add('wa-inbox-selected');waInboxNumber=c.numero;waInboxSelectedContact=c;document.getElementById('wa-inbox-contact-tools').hidden=false;
             document.getElementById('wa-inbox-label').value=c.etiqueta||'nuevo';document.getElementById('wa-inbox-note').value=c.nota||'';document.getElementById('wa-inbox-archived').checked=!!c.archivado;
+            document.getElementById('wa-inbox-assignee').value=waInboxAssignments.get(c.numero)||'';
             document.getElementById('wa-inbox-title').textContent=button.textContent;
             try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
           };box.appendChild(button);
