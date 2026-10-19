@@ -312,6 +312,16 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/contactos",tenantAccess,async(req
   try{res.json(await db.query("SELECT numero,nombre,etiqueta,nota,archivado FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY nombre,numero",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
   catch(e){res.status(500).json({error:"No se pudieron consultar los contactos"})}
 });
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/contactos",tenantAccess,async(req,res)=>{
+  const nombre=String(req.body?.nombre||"").trim();
+  const telefono=String(req.body?.telefono||"").replace(/[^0-9]/g,"");
+  if(!nombre||nombre.length>120||!/^[0-9]{7,15}$/.test(telefono))return res.status(400).json({error:"Nombre o teléfono inválido. Usá código de país y número."});
+  const numero=telefono+"@s.whatsapp.net";
+  try{
+    const rows=await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=EXCLUDED.nombre RETURNING numero,nombre,etiqueta,nota,archivado",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,nombre]);
+    res.status(201).json(rows[0]);
+  }catch(e){console.error("Tenant create contact:",e);res.status(500).json({error:"No se pudo agendar contacto"})}
+});
 app.patch("/tenants/:tenantId/whatsapp/:cuentaId/contactos/:numero",tenantAccess,async(req,res)=>{
   const numero=String(req.params.numero||"");
   const allowed=["nombre","etiqueta","nota","archivado"];
