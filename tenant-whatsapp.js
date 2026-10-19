@@ -75,6 +75,11 @@ export function createTenantWhatsApp(db) {
             }
             const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||content.buttonsResponseMessage?.selectedDisplayText||content.listResponseMessage?.title||content.templateButtonReplyMessage?.selectedDisplayText||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":"");
             if(!texto){console.warn("Tenant unsupported or undecrypted message",key,msg.key?.id,Object.keys(content));continue;}
+            // Skip previously persisted deliveries before downloading media again.
+            if(msg.key?.id){
+              const seen=await db.query("SELECT 1 FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND wa_message_id=$3 LIMIT 1",[account.tenant_id,key,msg.key.id]);
+              if(seen.length)continue;
+            }
             let mediaPath=null,mediaMime=null,mediaNombre=null;
             const media=content.imageMessage||content.videoMessage||content.audioMessage||content.documentMessage;
             if(media){
