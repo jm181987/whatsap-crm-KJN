@@ -150,10 +150,28 @@ La interfaz requiere escribir **`ELIMINAR`** para confirmar. La operación elimi
 | Se solicita QR nuevamente tras desplegar | Persistencia y permisos de `SESSION_DIR`; cambios de ruta o pérdida de credenciales |
 | Conexión WhatsApp abierta pero sin mensajes | Eventos de Baileys, procesamiento de mensajes, credenciales, permisos y errores de persistencia |
 | «Esperando este mensaje» o errores de cifrado | Estado de las claves de extremo a extremo; reconectar **no garantiza** recuperar mensajes que no pudieron descifrarse |
-| No aparecen fotos, audios o videos en una bandeja de empresa | La implementación de multimedia por empresa aún no está completa |
+| No aparecen fotos, audios o videos en una bandeja de empresa | Revisá eventos `messages.upsert`, descifrado, descarga del adjunto, permisos de archivos y errores en logs; las rutas multimedia existen, pero requieren validación con dispositivos reales |
 | Una función devuelve 403 | Verificá permisos y si la ruta pertenece al CRM heredado, que puede estar restringido |
 
 **No compartas** archivos `creds.json`, claves de sesión, contraseñas, tokens ni cadenas de conexión en incidencias públicas.
+
+### Comprobación después de cada despliegue
+
+Antes de habilitar nuevas empresas, verificá estos escenarios en un entorno de prueba:
+
+1. `GET /health` responde correctamente y PostgreSQL inicializa sin errores.
+2. La sesión principal y dos cuentas de **empresas distintas** conectan, conservan sus credenciales tras reiniciar Coolify y no comparten directorios.
+3. Cada cuenta recibe y envía **texto**, y recibe **imagen, video, audio y documento**; comprobá que el archivo se pueda abrir desde la bandeja autorizada.
+4. Dos operadores de empresas distintas no pueden acceder a conversaciones, contactos, adjuntos, reportes ni operaciones de la otra empresa, incluso llamando a la API directamente.
+5. Los contactos, estados, notas, recordatorios y seguimientos permanecen separados al cambiar de empresa.
+6. Probá una reconexión de una sola cuenta sin borrar el directorio completo de sesiones.
+7. Comprobá la exportación y, antes de importar datos heredados, revisá la vista previa y el destino.
+
+Si WhatsApp indica **conectado** pero no llegan mensajes, no asumas que el QR o la conexión de red son suficientes: revisá el evento entrante, la disponibilidad de claves de cifrado y la persistencia en PostgreSQL. El aviso de Baileys sobre `printQRInTerminal` obsoleto no demuestra por sí solo una falla de conexión.
+
+### Alcance y criterios para dar por finalizada la migración
+
+La plataforma debe ofrecer la misma lógica funcional para cada empresa creada. Para considerarla completa todavía falta validar y, donde corresponda, terminar la adaptación de la **bandeja principal heredada, Kanban visual, automatizaciones, envíos avanzados, reportes y sesión original** al contexto de empresa/cuenta. Las rutas heredadas restringidas deben permanecer protegidas hasta que exista aislamiento comprobado. No se debe declarar terminada la migración basándose únicamente en la existencia de endpoints o controles visuales.
 
 ## Seguridad y consideraciones operativas
 
