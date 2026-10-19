@@ -706,7 +706,10 @@
     .kanban .cliente:hover { background:var(--wa-card)!important; transform:none; }
     #chat { position:relative!important; top:auto!important; right:auto!important; width:auto!important; height:auto!important; margin:0!important; border:0!important; flex:1 1 auto; min-width:0; z-index:1; }
     #chat header { background:var(--wa-panel)!important; color:var(--wa-text)!important; border-bottom:1px solid var(--wa-border); min-height:50px; padding:10px 18px!important; }
-    #chat-header { font-weight:600; }
+    #chat-header { font-weight:600; font-size:14px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #chat header { min-height:36px!important; padding:5px 12px!important; gap:10px; }
+    #cerrarChat { display:grid; place-items:center; width:28px; height:28px; flex:0 0 28px; padding:0!important; font-size:20px!important; line-height:1; border-radius:6px!important; }
+    #cerrarChat:hover { background:var(--wa-border)!important; color:var(--wa-text)!important; }
     #cerrarChat { background:transparent!important; color:var(--wa-muted)!important; }
     #mensajes { flex:1 1 auto; min-height:100px; overflow-y:auto; padding:20px max(20px,8%)!important; background:var(--wa-bg); }
     .nota-box,.recordatorios-box { margin:8px 14px!important; border:1px solid var(--wa-border)!important; border-radius:10px; }
@@ -1002,7 +1005,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <strong>KNJ Conversaciones</strong><span>Elegí un contacto para ver los mensajes y responder desde el CRM.</span>
   </div>
   <div id="chat">
-    <header><span id="chat-header"></span><button id="cerrarChat">❌</button></header>
+    <header><span id="chat-header"></span><button id="cerrarChat" type="button" aria-label="Cerrar conversación" title="Cerrar conversación">×</button></header>
 
     <div class="nota-box">
       <h3><button type="button" id="wa-note-expand" aria-expanded="false" aria-controls="nota" title="Mostrar u ocultar nota">▸ 📝 Nota del contacto</button><button id="toggleNota">Editar</button></h3>
