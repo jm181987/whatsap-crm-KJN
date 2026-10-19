@@ -1114,6 +1114,13 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 <details id="wa-inbox-exports"><summary>Exportar datos de esta cuenta</summary>
 <button type="button" data-tenant-export="contactos">Contactos CSV</button><button type="button" data-tenant-export="mensajes">Mensajes CSV</button><button type="button" data-tenant-export="seguimientos">Seguimientos CSV</button><button type="button" data-tenant-export="recordatorios">Recordatorios CSV</button>
 </details>
+<details id="wa-inbox-automations"><summary>Automatizaciones de WhatsApp</summary>
+<p>Las reglas nuevas quedan desactivadas hasta que un administrador las habilite. Coincidencia exacta de palabra o frase.</p>
+<form id="wa-inbox-automation-form"><input id="wa-inbox-keyword" placeholder="Palabra o frase" minlength="2" maxlength="100" required><input id="wa-inbox-auto-response" placeholder="Respuesta automática" maxlength="4096" required><button>Crear regla</button></form>
+<div id="wa-inbox-automation-list"></div></details>
+<details id="wa-inbox-advanced-report"><summary>Reporte avanzado por fechas</summary>
+<form id="wa-inbox-report-form"><label>Desde <input type="date" id="wa-inbox-report-from" required></label><label>Hasta <input type="date" id="wa-inbox-report-to" required></label><button>Generar</button></form>
+<div id="wa-inbox-report-results"></div></details>
 <details id="wa-inbox-followups"><summary>Seguimientos de esta cuenta</summary>
 <form id="wa-inbox-followup-form"><input id="wa-inbox-followup-text" maxlength="2000" required placeholder="Nuevo seguimiento para el contacto seleccionado"><button>Agregar</button></form>
 <div id="wa-inbox-followup-list"></div></details>
@@ -3381,6 +3388,39 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         setTimeout(()=>URL.revokeObjectURL(href),10000);
       }catch(e){waInboxStatus.textContent=e.message}
     });
+    async function waInboxAutomations(){
+      const list=document.getElementById('wa-inbox-automation-list');list.replaceChildren();
+      if(!waInboxTenant.value||!waInboxAccount.value)return;
+      const rules=await waOperatorRequest(waInboxBase()+'/automatizaciones');
+      for(const rule of rules){
+        const row=document.createElement('div');row.style.margin='8px 0';
+        const title=document.createElement('span');title.textContent=rule.palabra+' → '+rule.respuesta+' ';
+        const toggle=document.createElement('button');toggle.type='button';toggle.textContent=rule.activo?'Desactivar':'Activar';
+        toggle.onclick=async()=>{try{await waOperatorRequest(waInboxBase()+'/automatizaciones/'+rule.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({activo:!rule.activo})});await waInboxAutomations()}catch(e){waInboxStatus.textContent=e.message}};
+        const del=document.createElement('button');del.type='button';del.textContent='Eliminar';
+        del.onclick=async()=>{if(!confirm('¿Eliminar automatización?'))return;try{await waOperatorRequest(waInboxBase()+'/automatizaciones/'+rule.id,{method:'DELETE'});await waInboxAutomations()}catch(e){waInboxStatus.textContent=e.message}};
+        row.append(title,toggle,del);list.append(row);
+      }
+    }
+    document.getElementById('wa-inbox-automation-form').onsubmit=async e=>{
+      e.preventDefault();
+      try{await waOperatorRequest(waInboxBase()+'/automatizaciones',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({palabra:document.getElementById('wa-inbox-keyword').value,respuesta:document.getElementById('wa-inbox-auto-response').value})});e.currentTarget.reset();await waInboxAutomations()}
+      catch(err){waInboxStatus.textContent=err.message}
+    };
+    document.getElementById('wa-inbox-report-form').onsubmit=async e=>{
+      e.preventDefault();
+      try{
+        const from=document.getElementById('wa-inbox-report-from').value,to=document.getElementById('wa-inbox-report-to').value;
+        const report=await waOperatorRequest(waInboxBase()+'/reporte-avanzado?desde='+encodeURIComponent(from)+'&hasta='+encodeURIComponent(to));
+        const output=document.getElementById('wa-inbox-report-results');output.replaceChildren();
+        for(const [title,items] of [['Actividad diaria',report.diario],['Contactos más activos',report.contactos],['Estados de contactos',report.estados]]){
+          const heading=document.createElement('h4');heading.textContent=title;output.append(heading);
+          const table=document.createElement('table');
+          for(const item of items){const tr=document.createElement('tr');for(const value of Object.values(item)){const td=document.createElement('td');td.textContent=String(value??'');tr.append(td)}table.append(tr)}
+          output.append(table);
+        }
+      }catch(err){waInboxStatus.textContent=err.message}
+    };
     async function waInboxDashboard(){
       const kpis=document.getElementById('wa-inbox-kpis'),kanban=document.getElementById('wa-inbox-kanban');
       kpis.replaceChildren();kanban.replaceChildren();
@@ -3464,7 +3504,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
             try{await waInboxMessages()}catch(e){waInboxStatus.textContent=e.message}
           };box.appendChild(button);
         }
-        await Promise.all([waInboxReminders(),waInboxFollowups(),waInboxDashboard(),waInboxQuickReplies()]);
+        await Promise.all([waInboxReminders(),waInboxFollowups(),waInboxDashboard(),waInboxAutomations(),waInboxQuickReplies()]);
       }catch(e){waInboxStatus.textContent=e.message}
     }
     document.getElementById('wa-inbox-search').oninput=e=>{const query=e.target.value.trim().toLocaleLowerCase();document.querySelectorAll('#wa-inbox-contacts button').forEach(b=>b.hidden=!b.dataset.contactSearch.toLocaleLowerCase().includes(query))};
