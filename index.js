@@ -190,6 +190,7 @@ app.delete("/admin/tenants/:id",requireAdmin,async(req,res)=>{
       if(!rows.rows.length)return null;
       const accounts=await query("SELECT id FROM crm_whatsapp_cuentas WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_whatsapp_asignaciones WHERE tenant_id=$1",[id]);
+      await query("DELETE FROM crm_tenant_conversacion_asignaciones WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_mensajes WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_recordatorios WHERE tenant_id=$1",[id]);
       await query("DELETE FROM crm_tenant_seguimientos WHERE tenant_id=$1",[id]);
@@ -416,6 +417,40 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/reporte-avanzado",tenantAccess,as
     res.json({desde,hasta,diario,contactos,estados});
   }catch(e){console.error("Advanced tenant report:",e);res.status(500).json({error:"No se pudo generar reporte"})}
 });
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/operadores",tenantAccess,async(req,res)=>{
+  try{res.json(await db.query("SELECT m.usuario,m.rol FROM crm_tenant_miembros m JOIN crm_tenants t ON t.id=m.tenant_id WHERE m.tenant_id=$1 AND m.activo=TRUE AND (m.rol='admin' OR t.modo_acceso='compartido' OR EXISTS (SELECT 1 FROM crm_whatsapp_asignaciones a WHERE a.tenant_id=m.tenant_id AND a.cuenta_id=$2 AND a.usuario=m.usuario)) ORDER BY m.usuario",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  catch(e){res.status(500).json({error:"No se pudieron cargar operadores"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/asignaciones",tenantAccess,async(req,res)=>{
+  try{res.json(await db.query("SELECT numero,usuario,asignado_por,asignado_en FROM crm_tenant_conversacion_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2",[req.tenantAccount.tenant_id,req.tenantAccount.id]))}
+  catch(e){res.status(500).json({error:"No se pudieron cargar asignaciones"})}
+});
+app.put("/tenants/:tenantId/whatsapp/:cuentaId/asignaciones/:numero",tenantAccess,async(req,res)=>{
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Solo administradores de empresa pueden asignar chats"});
+  const numero=String(req.params.numero||""),usuario=String(req.body?.usuario||"");
+  if(!numero||numero.length>150||usuario.length>100)return res.status(400).json({error:"Asignación inválida"});
+  try{
+    if(!usuario){await db.query("DELETE FROM crm_tenant_conversacion_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]);return res.json({ok:true})}
+    const allowed=await db.query("SELECT m.usuario FROM crm_tenant_miembros m JOIN crm_tenants t ON t.id=m.tenant_id WHERE m.tenant_id=$1 AND m.usuario=$3 AND m.activo=TRUE AND (m.rol='admin' OR t.modo_acceso='compartido' OR EXISTS(SELECT 1 FROM crm_whatsapp_asignaciones a WHERE a.tenant_id=$1 AND a.cuenta_id=$2 AND a.usuario=$3))",[req.tenantAccount.tenant_id,req.tenantAccount.id,usuario]);
+    if(!allowed.length)return res.status(403).json({error:"Operador sin acceso a esta cuenta"});
+    const contact=await db.query("SELECT 1 FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]);
+    if(!contact.length)return res.status(404).json({error:"Conversación inexistente"});
+    await db.query("INSERT INTO crm_tenant_conversacion_asignaciones(tenant_id,cuenta_id,numero,usuario,asignado_por) VALUES($1,$2,$3,$4,$5) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET usuario=EXCLUDED.usuario,asignado_por=EXCLUDED.asignado_por,asignado_en=NOW()",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,usuario,req.crmActor]);
+    res.json({ok:true});
+  }catch(e){console.error("Conversation assignment:",e);res.status(500).json({error:"No se pudo asignar conversación"})}
+});
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/kpis",tenantAccess,async(req,res)=>{
+  const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
+  const period=String(req.query.periodo||"7d");
+  if(!["7d","30d","90d"].includes(period))return res.status(400).json({error:"Período inválido"});
+  const days=Number.parseInt(period,10);
+  try{
+    const trend=await db.query("SELECT fecha::date::text AS dia,COUNT(*) FILTER(WHERE direccion='recibido')::int AS recibidos,COUNT(*) FILTER(WHERE direccion='enviado')::int AS enviados,COUNT(DISTINCT numero) FILTER(WHERE direccion='recibido')::int AS contactos_activos FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND fecha>=NOW()-($3::int * INTERVAL '1 day') GROUP BY fecha::date ORDER BY fecha::date",[t,c,days]);
+    const operators=await db.query("SELECT COALESCE(actor,'Sin identificar') AS operador,COUNT(*)::int AS enviados FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND direccion='enviado' AND fecha>=NOW()-($3::int*INTERVAL '1 day') GROUP BY actor ORDER BY enviados DESC",[t,c,days]);
+    const assigned=await db.query("SELECT usuario,COUNT(*)::int AS conversaciones FROM crm_tenant_conversacion_asignaciones WHERE tenant_id=$1 AND cuenta_id=$2 GROUP BY usuario ORDER BY conversaciones DESC",[t,c]);
+    res.json({periodo:period,tendencia:trend,operadores:operators,carga:assigned});
+  }catch(e){console.error("Tenant KPI:",e);res.status(500).json({error:"No se pudieron calcular indicadores"})}
+});
 app.get("/tenants/:tenantId/whatsapp/:cuentaId/dashboard",tenantAccess,async(req,res)=>{
   const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
   try{
@@ -513,7 +548,7 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar-masivo",tenantAccess,asyn
     for(const numero of numeros){
       try{
         await tenantWA.send(cuenta,numero,mensaje);
-        await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[tenant,cuenta,numero,mensaje]);
+        await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,actor) VALUES($1,$2,$3,$4,'enviado',$5)",[tenant,cuenta,numero,mensaje]);
         results.push({numero,ok:true});
       }catch(e){results.push({numero,ok:false,error:"No se pudo enviar"})}
       if(results.length<numeros.length)await new Promise(resolve=>setTimeout(resolve,1500));
@@ -527,7 +562,7 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,r
   if(!numero.endsWith("@s.whatsapp.net")||!/^[0-9]{5,20}$/.test(numero.slice(0,-15))||!texto||texto.length>4096)return res.status(400).json({error:"Número o mensaje inválido"});
   try{
     await tenantWA.send(req.tenantAccount.id,numero,texto);
-    await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,texto]);
+    await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero,texto,req.crmActor]);
     res.json({ok:true});
   }catch(e){res.status(503).json({error:e.message})}
 });
