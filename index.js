@@ -925,7 +925,7 @@ async function iniciarWhatsApp() {
       auth: state,
       printQRInTerminal: false,
       browser: ["Chrome", "Windows", "10.0"],
-      syncFullHistory: false,
+      syncFullHistory: process.env.WA_SYNC_HISTORY === "true",
       markOnlineOnConnect: true,
       defaultQueryTimeoutMs: 60000
     });
