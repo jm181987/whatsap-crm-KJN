@@ -932,21 +932,11 @@ async function iniciarWhatsApp() {
           sock=null;
           scheduleMainWhatsAppRetry(5000);
         } else {
-          console.warn("⚠️ Sesión principal desvinculada (401). Se conservarán las sesiones de otras empresas.");
-          try {
-            const sessionDir=path.resolve(process.env.SESSION_DIR || "session");
-            const archiveDir=path.join(sessionDir,"_invalidated_main_"+Date.now());
-            fs.mkdirSync(archiveDir,{recursive:true});
-            for(const entry of fs.readdirSync(sessionDir,{withFileTypes:true})){
-              // Never touch tenant credentials or prior backups.
-              if(!entry.isFile())continue;
-              if(entry.name==="creds.json"||entry.name.endsWith(".json")&&/^(?:app-state-sync-key|app-state-sync-version|pre-key|session|sender-key|sender-key-memory|lid-mapping|device-list|tctoken)-/.test(entry.name)){
-                fs.renameSync(path.join(sessionDir,entry.name),path.join(archiveDir,entry.name));
-              }
-            }
-            console.log("🔐 Credenciales principales archivadas; preparando nuevo QR.");
-            scheduleMainWhatsAppRetry(1500);
-          }catch(err){console.error("No se pudieron archivar las credenciales de la sesión principal:",err)}
+          // A 401 revokes this login; never erase Signal keys automatically.
+          console.error("WhatsApp principal: sesión revocada (401). Claves conservadas. Restablecé la sesión manualmente si necesitás vincular de nuevo.");
+          sock=null;
+          try{socket.ev.removeAllListeners("creds.update")}catch{}
+          try{socket.end?.(new Error("WhatsApp main session revoked"))}catch{}
 
         }
       }
