@@ -1122,6 +1122,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
  .wa-company-composer{padding:9px}
  .wa-company-composer #wa-inbox-text{font-size:16px}
 }
+
+/* Compact conversation typography, shared by every company account. */
+.wa-company-sidebar #wa-inbox-contacts button{display:flex;flex-direction:column;gap:3px;padding:9px 11px;margin:2px 0;min-width:0}
+.wa-company-contact-name{display:block;max-width:100%;font-size:13px;font-weight:600;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-company-contact-number{display:block;max-width:100%;font-size:11px;line-height:1.25;opacity:.62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-company-chat-head #wa-inbox-title{font-size:14px;line-height:1.35;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wa-company-chat-head{padding:11px 14px;min-width:0}
+@media(max-width:700px){.wa-company-sidebar #wa-inbox-contacts button{padding:9px 10px}.wa-company-chat-head #wa-inbox-title{font-size:13px}}
 </style>
 <section id="wa-admin-panel" aria-label="Administración" hidden>
     <div class="wa-dash-head"><div><h2 id="wa-admin-title">Administración</h2><p id="wa-admin-description">Empresas, operadores y actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
@@ -3585,7 +3593,11 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         const contacts=await waOperatorRequest(waInboxBase()+'/contactos');
         for(const c of contacts){
           const button=document.createElement('button');button.type='button';button.dataset.contactSearch=(c.nombre||'')+' '+c.numero;
-          button.textContent=c.nombre||c.numero;button.onclick=async()=>{
+          const displayName=(c.nombre||'').trim()||c.numero;
+          const name=document.createElement('span');name.className='wa-company-contact-name';name.textContent=displayName;
+          const number=document.createElement('small');number.className='wa-company-contact-number';number.textContent=c.nombre&&c.nombre.trim()?c.numero:'';
+          button.append(name,number);button.title=displayName+' · '+c.numero;
+          button.onclick=async()=>{
             box.querySelectorAll('button').forEach(b=>b.classList.remove('wa-inbox-selected'));button.classList.add('wa-inbox-selected');waCompanyMobileView('chats');waInboxNumber=c.numero;waInboxSelectedContact=c;document.getElementById('wa-inbox-contact-tools').hidden=false;
             document.getElementById('wa-inbox-label').value=c.etiqueta||'nuevo';document.getElementById('wa-inbox-note').value=c.nota||'';document.getElementById('wa-inbox-archived').checked=!!c.archivado;
             document.getElementById('wa-inbox-assignee').value=waInboxAssignments.get(c.numero)||'';
