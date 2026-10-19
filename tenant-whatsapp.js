@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadContentFromMessage } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadContentFromMessage, downloadMediaMessage } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
 import { randomUUID } from "node:crypto";
 
@@ -21,7 +21,7 @@ export function createTenantWhatsApp(db) {
       if(current.status==="error"){stop(key)}
       else return current.status;
     }
-    const item = {status:"iniciando",qr:null,socket:null,retry:null,stopped:false,attempt:0,lastError:null};
+    const item = {status:"iniciando",qr:null,socket:null,retry:null,stopped:false,attempt:0,lastError:null,messageCache:new Map(),retryCounts:new Map()};
     instances.set(key,item);
     async function connect() {
       if(item.stopped)return;
@@ -32,7 +32,16 @@ export function createTenantWhatsApp(db) {
         fs.mkdirSync(dir,{recursive:true});
         const {state,saveCreds}=await useMultiFileAuthState(dir);
         const {version}=await fetchLatestBaileysVersion();
-        const socket=makeWASocket({version,auth:state,printQRInTerminal:false,syncFullHistory:false});
+        const socket=makeWASocket({
+          version,auth:state,printQRInTerminal:false,syncFullHistory:false,
+          msgRetryCounterCache:{
+            get:(id)=>item.retryCounts.get(id),
+            set:(id,count)=>{if(item.retryCounts.size>3000)item.retryCounts.clear();item.retryCounts.set(id,count)},
+            del:(id)=>item.retryCounts.delete(id),
+            flushAll:()=>item.retryCounts.clear()
+          },
+          getMessage:async key=>item.messageCache.get(key.id)?.message
+        });
         item.socket=socket;
         socket.ev.on("creds.update",async()=>{
           if(item.stopped||item.socket!==socket)return;
@@ -64,6 +73,10 @@ export function createTenantWhatsApp(db) {
           console.log("📥 Tenant WhatsApp upsert:",key,event.type,"cantidad:",event.messages?.length||0);
           for(const msg of event.messages||[]){
             try{
+            if(msg.key?.id&&msg.message){
+              if(item.messageCache.size>1000)item.messageCache.delete(item.messageCache.keys().next().value);
+              item.messageCache.set(msg.key.id,msg);
+            }
             if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
             if(msg.message.protocolMessage||msg.message.senderKeyDistributionMessage||msg.message.reactionMessage)continue;
             const numero=msg.key.remoteJidAlt?.endsWith("@s.whatsapp.net")?msg.key.remoteJidAlt:msg.key.remoteJid;
@@ -87,7 +100,7 @@ export function createTenantWhatsApp(db) {
               mediaMime=String(media.mimetype||"application/octet-stream").split(";")[0];
               mediaNombre=String(media.fileName||kind).slice(0,150);
               try{
-                const stream=await downloadContentFromMessage(media,kind);
+                const stream=await downloadContentFromMessage(media,kind,{logger:socket.logger,reuploadRequest:socket.updateMediaMessage?.bind(socket)});
                 const chunks=[];let size=0;
                 for await(const chunk of stream){
                   size+=chunk.length;
@@ -142,7 +155,8 @@ export function createTenantWhatsApp(db) {
   async function send(id,numero,texto){
     const item=instances.get(Number(id));
     if(item?.status!=="conectado"||!item.socket)throw new Error("WhatsApp no conectado");
-    await item.socket.sendMessage(numero,{text:texto});
+    const sent=await item.socket.sendMessage(numero,{text:texto});
+    if(sent?.key?.id)item.messageCache.set(sent.key.id,sent);
   }
   async function sendMedia(id,numero,{kind,data,mimeType,fileName,caption}){
     const item=instances.get(Number(id));
@@ -153,7 +167,8 @@ export function createTenantWhatsApp(db) {
       kind==="video"?{video:buffer,mimetype:mimeType,caption:caption||""}:
       kind==="audio"?{audio:buffer,mimetype:mimeType,ptt:false}:
       {document:buffer,mimetype:mimeType,fileName:fileName||"archivo"};
-    await item.socket.sendMessage(numero,payload);
+    const sent=await item.socket.sendMessage(numero,payload);
+    if(sent?.key?.id)item.messageCache.set(sent.key.id,sent);
   }
   function stop(id){
     const item=instances.get(Number(id));if(!item)return;
