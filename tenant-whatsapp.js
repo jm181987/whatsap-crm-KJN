@@ -100,7 +100,7 @@ export function createTenantWhatsApp(db) {
             }
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
-              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null]);
+              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre,wa_message_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null,msg.key?.id||null]);
               console.log("✅ Tenant mensaje persistido:",account.tenant_id,key,msg.key?.id,mediaPath?"multimedia":"texto");
             }catch(e){console.error("Tenant message persistence:",e)}
             }catch(e){console.error("Tenant incoming message error:",key,msg?.key?.id,e)}
