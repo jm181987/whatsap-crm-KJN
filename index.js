@@ -954,7 +954,7 @@ async function iniciarWhatsApp() {
         try {
           if (fs.existsSync("public/qr.json")) fs.unlinkSync("public/qr.json");
           console.log("✅ Conectado a WhatsApp");
-          await sincronizarChats();
+          console.log("Sincronización de chats por eventos de Baileys activa");
         } catch (error) {
           console.error("Error eliminando QR:", error);
         }
@@ -978,6 +978,7 @@ async function iniciarWhatsApp() {
     });
 
     // Configurar manejo de mensajes
+    instalarSincronizacionChats(socket);
     configurarManejoMensajes(socket);
 
   } catch (error) {
@@ -1302,54 +1303,29 @@ function crearNotificacion(numero, contacto, mensaje, fecha) {
    SINCRONIZAR CHATS
 ======================================================== */
 
-async function sincronizarChats() {
-  try {
-    if (!sock.store?.chats) {
-      console.log("⚠ Store no disponible para sincronizar chats");
-      return;
-    }
-
-    const chats = await sock.store.chats.all();
-    let nuevos = 0;
-
-    for (const c of chats) {
-      const numero = c.id;
-      const nombre = c.name || c.subject || "Sin nombre";
-      const isGroup = numero.endsWith("@g.us");
-      const etiqueta = isGroup ? "grupos" : "nuevo";
-      const fecha = new Date().toISOString();
-
-      db.get("SELECT * FROM clientes WHERE numero=?", [numero], (err, row) => {
-        if (err) {
-          console.error("Error buscando chat:", err);
-          return;
-        }
-
-        if (!row) {
-          db.run(
-            `INSERT INTO clientes (numero, nombre, etiqueta, ultima_interaccion, archivado, nota)
-             VALUES (?, ?, ?, ?, 0, '')`,
-            [numero, nombre, etiqueta, fecha],
-            function(err) {
-              if (err) {
-                if (!err.message.includes("UNIQUE constraint")) {
-                  console.error("Error insertando chat:", err);
-                }
-              } else {
-                nuevos++;
-              }
-            }
-          );
-        }
-      });
-    }
-
-    console.log(`🔄 Chats sincronizados. Nuevos: ${nuevos}`);
-  } catch (e) {
-    console.log("⚠ Error al sincronizar chats:", e.message);
+// Baileys no incluye socket.store: sincronizar por eventos reales.
+async function registrarChatsDesdeEvento(chats) {
+  let nuevos=0;
+  for(const chat of chats||[]){
+    const numero=String(chat.id||chat.jid||"");
+    if(!numero||numero==="status@broadcast")continue;
+    const nombre=String(chat.name||chat.subject||chat.notify||numero);
+    const etiqueta=numero.endsWith("@g.us")?"grupos":"nuevo";
+    try{
+      const rows=await db.query("INSERT INTO clientes(numero,nombre,etiqueta,ultima_interaccion,archivado,nota) VALUES($1,$2,$3,$4,0,'') ON CONFLICT(numero) DO NOTHING RETURNING numero",[numero,nombre,etiqueta,new Date().toISOString()]);
+      nuevos+=rows.length;
+    }catch(e){console.error("No se pudo registrar chat:",numero,e)}
   }
+  if(nuevos)console.log("Chats nuevos registrados:",nuevos);
 }
-
+function instalarSincronizacionChats(socket){
+  socket.ev.on("chats.upsert",chats=>{registrarChatsDesdeEvento(chats).catch(e=>console.error("chats.upsert:",e))});
+  socket.ev.on("contacts.upsert",contacts=>{registrarChatsDesdeEvento(contacts).catch(e=>console.error("contacts.upsert:",e))});
+  socket.ev.on("messaging-history.set",event=>{
+    registrarChatsDesdeEvento(event.chats||[]).catch(e=>console.error("messaging-history.set:",e));
+    registrarChatsDesdeEvento(event.contacts||[]).catch(e=>console.error("history contacts:",e));
+  });
+}
 /* ========================================================
    ENDPOINTS PARA ARCHIVOS MULTIMEDIA
 ======================================================== */
