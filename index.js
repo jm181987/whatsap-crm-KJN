@@ -432,6 +432,35 @@ app.get("/tenants/:tenantId/whatsapp/:cuentaId/mensajes",tenantAccess,async(req,
   try{res.json(await db.query("SELECT id,numero,texto,direccion,fecha,media_mime,media_nombre,(media_path IS NOT NULL) AS tiene_media FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=$3 ORDER BY id DESC LIMIT 200",[req.tenantAccount.tenant_id,req.tenantAccount.id,numero]))}
   catch(e){res.status(500).json({error:"No se pudieron consultar los mensajes"})}
 });
+// Exportación de conversaciones de una única cuenta; los permisos se validan antes de consultar.
+app.get("/tenants/:tenantId/whatsapp/:cuentaId/reporte.csv",tenantAccess,async(req,res)=>{
+  try{
+    const rows=await db.query("SELECT fecha,numero,direccion,texto FROM crm_tenant_mensajes WHERE tenant_id=$1 AND cuenta_id=$2 ORDER BY id DESC LIMIT 10000",[req.tenantAccount.tenant_id,req.tenantAccount.id]);
+    const cell=v=>'"'+String(v??"").replace(/^[=+@-]/,"'").replace(/"/g,'""')+'"';
+    const csv="fecha,numero,direccion,texto\r\n"+rows.map(row=>[row.fecha instanceof Date?row.fecha.toISOString():row.fecha,row.numero,row.direccion,row.texto].map(cell).join(",")).join("\r\n");
+    res.set("Content-Type","text/csv; charset=utf-8");
+    res.set("Content-Disposition",'attachment; filename="conversaciones-empresa-'+req.tenantAccount.tenant_id+'-cuenta-'+req.tenantAccount.id+'.csv"');
+    res.send("\uFEFF"+csv);
+  }catch(e){console.error("Tenant export:",e);res.status(500).json({error:"No se pudo exportar el reporte"})}
+});
+// Migración heredada: sólo administrador global, con vista previa y confirmación explícita.
+// Se copian datos; nunca se eliminan los originales ni se importa automáticamente.
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/importar-heredado",tenantAccess,async(req,res)=>{
+  if(req.crmActor!==crmUser)return res.status(403).json({error:"Sólo administrador global"});
+  const confirm=req.body?.confirmacion==="IMPORTAR";
+  try{
+    const counts=await db.query("SELECT (SELECT COUNT(*)::int FROM clientes) AS contactos,(SELECT COUNT(*)::int FROM mensajes) AS mensajes");
+    if(!confirm)return res.json({vista_previa:true,...counts[0],aviso:"Los registros heredados no identifican empresa de origen. Importá únicamente a la cuenta propietaria de estos datos."});
+    const t=req.tenantAccount.tenant_id,c=req.tenantAccount.id;
+    const result=await withTransaction(async query=>{
+      const contacts=await query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre,etiqueta,nota) SELECT $1,$2,numero,COALESCE(nombre,''),COALESCE(NULLIF(etiqueta,''),'nuevo'),COALESCE(nota,'') FROM clientes WHERE numero IS NOT NULL ON CONFLICT(tenant_id,cuenta_id,numero) DO NOTHING",[t,c]);
+      // Evitar duplicados en sucesivas importaciones: se registra el ID original con prefijo legacy.
+      const messages=await query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,fecha,wa_message_id) SELECT $1,$2,numero,COALESCE(mensaje,''),CASE WHEN tipo='enviado' THEN 'enviado' ELSE 'recibido' END,COALESCE(NULLIF(fecha,'')::timestamptz,NOW()),'legacy-'+id::text FROM mensajes WHERE numero IS NOT NULL ON CONFLICT DO NOTHING",[t,c]);
+      return {contactos:contacts.rowCount,mensajes:messages.rowCount};
+    });
+    res.json({ok:true,...result});
+  }catch(e){console.error("Legacy tenant import:",e);res.status(500).json({error:"No se pudo importar; se revirtieron los cambios"})}
+});
 app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,res)=>{
   const numero=String(req.body?.numero||""),texto=String(req.body?.mensaje||"");
   if(!numero.endsWith("@s.whatsapp.net")||!/^[0-9]{5,20}$/.test(numero.slice(0,-15))||!texto||texto.length>4096)return res.status(400).json({error:"Número o mensaje inválido"});
