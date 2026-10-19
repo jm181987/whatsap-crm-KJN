@@ -21,6 +21,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { Parser } from "json2csv";
 
+// Zona horaria operativa del CRM; PostgreSQL conserva instantes TIMESTAMPTZ.
+process.env.TZ = "America/Montevideo";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
