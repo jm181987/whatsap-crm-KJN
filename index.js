@@ -461,6 +461,30 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/importar-heredado",tenantAccess,
     res.json({ok:true,...result});
   }catch(e){console.error("Legacy tenant import:",e);res.status(500).json({error:"No se pudo importar; se revirtieron los cambios"})}
 });
+const tenantBulkLocks=new Set();
+app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar-masivo",tenantAccess,async(req,res)=>{
+  const cuenta=req.tenantAccount.id,tenant=req.tenantAccount.tenant_id;
+  if(req.tenantRole!=="admin")return res.status(403).json({error:"Se requiere administrador de empresa"});
+  const numeros=req.body?.numeros,mensaje=req.body?.mensaje;
+  if(!Array.isArray(numeros)||numeros.length<1||numeros.length>20||new Set(numeros).size!==numeros.length||numeros.some(n=>typeof n!=="string"||!/^[0-9]{5,20}@s\.whatsapp\.net$/.test(n))||typeof mensaje!=="string"||!mensaje.trim()||mensaje.length>4096||req.body?.consentimiento!==true)return res.status(400).json({error:"Máximo 20 destinatarios únicos con consentimiento confirmado y texto válido"});
+  if(tenantBulkLocks.has(cuenta))return res.status(409).json({error:"Ya hay un envío en curso para esta cuenta"});
+  tenantBulkLocks.add(cuenta);
+  try{
+    const permitidos=await db.query("SELECT numero FROM crm_tenant_contactos WHERE tenant_id=$1 AND cuenta_id=$2 AND numero=ANY($3::text[])",[tenant,cuenta,numeros]);
+    if(permitidos.length!==numeros.length)return res.status(400).json({error:"Todos los destinatarios deben pertenecer a los contactos de esta cuenta"});
+    const results=[];
+    for(const numero of numeros){
+      try{
+        await tenantWA.send(cuenta,numero,mensaje);
+        await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion) VALUES($1,$2,$3,$4,'enviado')",[tenant,cuenta,numero,mensaje]);
+        results.push({numero,ok:true});
+      }catch(e){results.push({numero,ok:false,error:"No se pudo enviar"})}
+      if(results.length<numeros.length)await new Promise(resolve=>setTimeout(resolve,1500));
+    }
+    res.json({ok:true,enviados:results.filter(x=>x.ok).length,fallidos:results.filter(x=>!x.ok).length,resultados:results});
+  }catch(e){console.error("Tenant bulk:",e);res.status(500).json({error:"Error en envío masivo"})}
+  finally{tenantBulkLocks.delete(cuenta)}
+});
 app.post("/tenants/:tenantId/whatsapp/:cuentaId/enviar",tenantAccess,async(req,res)=>{
   const numero=String(req.body?.numero||""),texto=String(req.body?.mensaje||"");
   if(!numero.endsWith("@s.whatsapp.net")||!/^[0-9]{5,20}$/.test(numero.slice(0,-15))||!texto||texto.length>4096)return res.status(400).json({error:"Número o mensaje inválido"});
