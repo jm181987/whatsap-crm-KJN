@@ -1130,6 +1130,35 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .wa-company-chat-head #wa-inbox-title{font-size:14px;line-height:1.35;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wa-company-chat-head{padding:11px 14px;min-width:0}
 @media(max-width:700px){.wa-company-sidebar #wa-inbox-contacts button{padding:9px 10px}.wa-company-chat-head #wa-inbox-title{font-size:13px}}
+/* Visibility and accessible scrolling for every tenant CRM section */
+#wa-admin-panel{overflow-y:auto!important;overflow-x:auto!important;overscroll-behavior:contain}
+#wa-admin-panel .wa-dash-card{width:100%;max-width:none;overflow:visible}
+#wa-tenant-inbox{overflow:visible!important}
+.wa-company-layout{height:auto!important;min-height:560px;align-items:stretch}
+.wa-company-sidebar,.wa-company-main{height:clamp(460px,70dvh,820px);min-height:0}
+.wa-company-tools{height:clamp(460px,70dvh,820px);min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
+.wa-company-tools details,.wa-company-tools form,.wa-company-tools section{min-width:0;overflow-wrap:anywhere}
+.wa-company-tools button,.wa-company-composer button{white-space:normal}
+.wa-company-switcher{position:relative;z-index:1}
+#wa-inbox-messages{min-height:0;overflow-y:auto;overflow-x:hidden}
+.wa-company-composer{flex-shrink:0}
+@media(min-width:651px) and (max-width:1050px){
+ .wa-company-layout{grid-template-columns:minmax(180px,32%) minmax(0,1fr)}
+ .wa-company-tools{height:auto;max-height:none!important;overflow:visible;grid-column:1/-1}
+ .wa-company-sidebar,.wa-company-main{height:clamp(460px,68dvh,760px)}
+}
+@media(max-width:650px){
+ #wa-admin-panel{overflow-x:hidden!important}
+ .wa-company-layout{display:flex;min-height:0}
+ .wa-company-layout[data-mobile-view=contactos] .wa-company-sidebar,
+ .wa-company-layout[data-mobile-view=chats] .wa-company-main,
+ .wa-company-layout[data-mobile-view=herramientas] .wa-company-tools{height:auto;min-height:420px;max-height:none}
+ .wa-company-layout[data-mobile-view=chats] .wa-company-main{height:clamp(450px,72dvh,800px)}
+ .wa-company-layout[data-mobile-view=contactos] .wa-company-sidebar{height:clamp(360px,60dvh,680px)}
+ .wa-company-layout[data-mobile-view=herramientas] .wa-company-tools{display:flex;overflow:visible;max-height:none}
+ .wa-company-composer #wa-inbox-send{flex-wrap:wrap}
+ .wa-company-composer #wa-inbox-send button{flex:0 0 auto}
+}
 </style>
 <section id="wa-admin-panel" aria-label="Administración" hidden>
     <div class="wa-dash-head"><div><h2 id="wa-admin-title">Administración</h2><p id="wa-admin-description">Empresas, operadores y actividad</p></div><button type="button" id="wa-admin-close">Volver a chats</button></div>
