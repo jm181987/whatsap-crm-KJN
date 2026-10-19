@@ -33,7 +33,7 @@ export function createTenantWhatsApp(db) {
         const {state,saveCreds}=await useMultiFileAuthState(dir);
         const {version}=await fetchLatestBaileysVersion();
         const socket=makeWASocket({
-          version,auth:state,printQRInTerminal:false,syncFullHistory:false,
+          version,auth:state,printQRInTerminal:false,syncFullHistory:process.env.WA_SYNC_HISTORY==="true",
           msgRetryCounterCache:{
             get:(id)=>item.retryCounts.get(id),
             set:(id,count)=>{if(item.retryCounts.size>3000)item.retryCounts.clear();item.retryCounts.set(id,count)},
