@@ -455,7 +455,7 @@ app.post("/tenants/:tenantId/whatsapp/:cuentaId/importar-heredado",tenantAccess,
     const result=await withTransaction(async query=>{
       const contacts=await query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre,etiqueta,nota) SELECT $1,$2,numero,COALESCE(nombre,''),COALESCE(NULLIF(etiqueta,''),'nuevo'),COALESCE(nota,'') FROM clientes WHERE numero IS NOT NULL ON CONFLICT(tenant_id,cuenta_id,numero) DO NOTHING",[t,c]);
       // Evitar duplicados en sucesivas importaciones: se registra el ID original con prefijo legacy.
-      const messages=await query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,fecha,wa_message_id) SELECT $1,$2,numero,COALESCE(mensaje,''),CASE WHEN tipo='enviado' THEN 'enviado' ELSE 'recibido' END,COALESCE(NULLIF(fecha,'')::timestamptz,NOW()),'legacy-'+id::text FROM mensajes WHERE numero IS NOT NULL ON CONFLICT DO NOTHING",[t,c]);
+      const messages=await query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,fecha,wa_message_id) SELECT $1,$2,numero,COALESCE(mensaje,''),CASE WHEN tipo='enviado' THEN 'enviado' ELSE 'recibido' END,NOW(),'legacy-'+id::text FROM mensajes WHERE numero IS NOT NULL ON CONFLICT DO NOTHING",[t,c]);
       return {contactos:contacts.rowCount,mensajes:messages.rowCount};
     });
     res.json({ok:true,...result});
