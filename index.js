@@ -950,7 +950,7 @@ async function iniciarWhatsApp() {
       auth: state,
       printQRInTerminal: false,
       browser: ["Chrome", "Windows", "10.0"],
-      syncFullHistory: process.env.WA_SYNC_HISTORY === "true",
+      syncFullHistory: process.env.WA_SYNC_HISTORY !== "false",
       markOnlineOnConnect: true,
       defaultQueryTimeoutMs: 60000
     });
@@ -1074,7 +1074,14 @@ function configurarManejoMensajes(socket) {
     console.log("📥 WhatsApp principal: evento", event.type, "mensajes", event.messages?.length || 0);
     for (const msg of event.messages || []) {
       try {
-        if (msg.key?.fromMe || !msg.message || msg.key?.remoteJid === "status@broadcast") continue;
+        if (!msg.message || msg.key?.remoteJid === "status@broadcast") continue;
+        if(msg.key?.fromMe){
+          const numero=await resolveConversationJid(msg.key.remoteJid,msg.key.remoteJidAlt);
+          const content=msg.message.ephemeralMessage?.message||msg.message;
+          const texto=content.conversation||content.extendedTextMessage?.text||content.imageMessage?.caption||content.videoMessage?.caption||(content.imageMessage?"🖼️ Imagen":content.audioMessage?"🎵 Audio":content.videoMessage?"🎥 Video":content.documentMessage?"📄 Documento":null);
+          if(texto){const fecha=msg.messageTimestamp?new Date(Number(msg.messageTimestamp?.low??msg.messageTimestamp)*1000).toISOString():new Date().toISOString();await guardarMensajeEnDB(numero,texto,"enviado",fecha,null,null,0);actualizarCliente(numero,msg.pushName||numero,fecha)}
+          continue;
+        }
         let content = msg.message;
         for (let depth=0; depth<6; depth++) {
           const nested=content.ephemeralMessage?.message || content.viewOnceMessage?.message ||
@@ -1347,6 +1354,7 @@ function instalarSincronizacionChats(socket){
   socket.ev.on("chats.upsert",chats=>{registrarChatsDesdeEvento(chats).catch(e=>console.error("chats.upsert:",e))});
   socket.ev.on("messaging-history.set",event=>{
     registrarChatsDesdeEvento(event.chats||[]).catch(e=>console.error("messaging-history.set:",e));
+    if(event.messages?.length)socket.ev.emit("messages.upsert",{type:"append",messages:event.messages});
   });
 }
 /* ========================================================
