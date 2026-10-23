@@ -1875,7 +1875,16 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 ======================================================== */
 
 // Endpoint QR
-app.get("/api/whatsapp/global/status",requireAdmin,(req,res)=>res.json({status:mainWaStatus,updatedAt:mainWaUpdatedAt,connected:mainWaStatus==="connected"}));
+app.get("/api/whatsapp/global/status",requireAdmin,(req,res)=>res.json({status:mainWaStatus,updatedAt:mainWaUpdatedAt,connected:mainWaStatus==="connected",hasQr:Boolean(mainWaQr),hasSocket:Boolean(sock),sessionDir:process.env.SESSION_DIR?"configured":"default"}));
+app.post("/api/whatsapp/global/reconnect",requireAdmin,async(req,res)=>{
+  if(mainWaStatus==="connected")return res.status(409).json({error:"La sesión global ya está conectada. Desvinculala antes de solicitar otro QR."});
+  mainWaManuallyLoggedOut=false;clearTimeout(mainWaRetry);mainWaRetry=null;
+  const previous=sock;mainWaGeneration++;sock=null;mainWaQr=null;
+  try{previous?.end?.(new Error("Reinicio manual de conexión global"))}catch{}
+  mainWaStatus="connecting";mainWaUpdatedAt=new Date().toISOString();
+  setImmediate(()=>iniciarWhatsApp());
+  res.json({ok:true,status:"connecting"});
+});
 app.post("/api/whatsapp/global/logout",requireAdmin,async(req,res)=>{
   if(!sock)return res.status(409).json({error:"La sesión global no está activa"});
   mainWaManuallyLoggedOut=true;clearTimeout(mainWaRetry);mainWaRetry=null;
