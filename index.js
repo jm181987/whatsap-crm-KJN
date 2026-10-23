@@ -2225,6 +2225,13 @@ app.post("/api/whatsapp/global/import-vcf",requireAdmin,express.text({type:["tex
     res.json({ok:true,contacts:cards.length,matched,updated,skipped});
   }catch(error){console.error("VCF import:",error);res.status(500).json({error:"No se pudo importar la agenda"})}
 });
+app.patch("/clientes/:numero/nombre",async(req,res)=>{
+  const numero=decodeURIComponent(req.params.numero);
+  const nombre=String(req.body?.nombre||"").trim();
+  if(!nombre||nombre.length>160)return res.status(400).json({error:"El nombre debe tener entre 1 y 160 caracteres"});
+  try{const rows=await db.query("UPDATE clientes SET nombre=$1 WHERE numero=$2 RETURNING numero,nombre",[nombre,numero]);if(!rows.length)return res.status(404).json({error:"Conversación no encontrada"});res.json({ok:true,cliente:rows[0]})}
+  catch(e){console.error("Error editando nombre:",e);res.status(500).json({error:"No se pudo guardar el nombre"})}
+});
 app.get("/clientes", async (req,res)=>{
   try{
     const rows=await db.query("SELECT c.* FROM clientes c WHERE EXISTS (SELECT 1 FROM mensajes m WHERE m.numero=c.numero) ORDER BY c.ultima_interaccion DESC NULLS LAST");
