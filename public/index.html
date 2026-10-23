@@ -1013,7 +1013,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     <strong>KNJ Conversaciones</strong><span>Elegí un contacto para ver los mensajes y responder desde el CRM.</span>
   </div>
   <div id="chat">
-    <header><span id="chat-header"></span><button id="cerrarChat" type="button" aria-label="Cerrar conversación" title="Cerrar conversación">×</button></header>
+    <header><span id="chat-header"></span><button id="wa-edit-chat-name" type="button" title="Editar nombre del contacto">✏️ Nombre</button><button id="cerrarChat" type="button" aria-label="Cerrar conversación" title="Cerrar conversación">×</button></header>
 
     <div class="nota-box">
       <h3><button type="button" id="wa-note-expand" aria-expanded="false" aria-controls="nota" title="Mostrar u ocultar nota">▸ 📝 Nota del contacto</button><button id="toggleNota">Editar</button></h3>
@@ -1644,6 +1644,14 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     }
 
     // Cerrar chat
+    document.getElementById('wa-edit-chat-name').addEventListener('click',async()=>{
+      if(!clienteActual)return;
+      const nuevo=prompt('Nombre para mostrar en el CRM:',clienteActual.nombre||'');
+      if(nuevo===null)return;
+      const nombre=nuevo.trim();if(!nombre||nombre.length>160){alert('Ingresá un nombre de 1 a 160 caracteres.');return}
+      try{const response=await fetch('/clientes/'+encodeURIComponent(clienteActual.numero)+'/nombre',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre})});const data=await response.json();if(!response.ok)throw new Error(data.error||'No se pudo guardar');clienteActual.nombre=nombre;document.getElementById('chat-header').textContent=nombre;await cargarClientes();}
+      catch(error){alert('Error al cambiar el nombre: '+error.message)}
+    });
     cerrarChatBtn.onclick = () => {
       const previous=clienteActual;
       clienteActual=null;
