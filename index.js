@@ -1880,7 +1880,7 @@ app.post("/api/whatsapp/global/logout",requireAdmin,async(req,res)=>{
   mainWaManuallyLoggedOut=true;clearTimeout(mainWaRetry);mainWaRetry=null;
   const current=sock;mainWaGeneration++;sock=null;
   mainWaStatus="disconnected";mainWaUpdatedAt=new Date().toISOString();
-  try{await current.logout();try{current.end?.(new Error("Sesión global cerrada por administrador"))}catch{};try{fs.unlinkSync("public/qr.json")}catch(e){if(e.code!=="ENOENT")console.error(e)};res.json({ok:true,status:"disconnected"});}
+  try{await current.logout();try{current.end?.(new Error("Sesión global cerrada por administrador"))}catch{};try{fs.unlinkSync("public/qr.json")}catch(e){if(e.code!=="ENOENT")console.error(e)};mainWaManuallyLoggedOut=false;setTimeout(()=>iniciarWhatsApp(),1000);res.json({ok:true,status:"connecting"});}
   catch(error){mainWaManuallyLoggedOut=false;scheduleMainWhatsAppRetry(5000);res.status(500).json({error:"No se pudo desvincular WhatsApp global",detail:error.message})}
 });
 app.get("/qr.json", requireAdmin, (req, res) => {
