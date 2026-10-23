@@ -993,7 +993,7 @@ async function iniciarWhatsApp() {
           scheduleMainWhatsAppRetry(5000);
         } else {
           // A 401 revokes this login; never erase Signal keys automatically.
-          console.error("WhatsApp principal: sesión revocada (401). Claves conservadas. Restablecé la sesión manualmente si necesitás vincular de nuevo.");
+          console.error("WhatsApp principal: sesión revocada (401). Usá Restablecer sesión global para generar nuevas credenciales.");
           sock=null;
           try{socket.ev.removeAllListeners("creds.update")}catch{}
           try{socket.end?.(new Error("WhatsApp main session revoked"))}catch{}
@@ -1876,6 +1876,34 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 
 // Endpoint QR
 app.get("/api/whatsapp/global/status",requireAdmin,(req,res)=>res.json({status:mainWaStatus,updatedAt:mainWaUpdatedAt,connected:mainWaStatus==="connected",hasQr:Boolean(mainWaQr),hasSocket:Boolean(sock),sessionDir:process.env.SESSION_DIR?"configured":"default"}));
+function resetGlobalAuthFiles(){
+  const dir=path.resolve(process.env.SESSION_DIR || "session");
+  fs.mkdirSync(dir,{recursive:true});
+  let removed=0;
+  for(const name of fs.readdirSync(dir)){
+    if(name==="tenants")continue;
+    const target=path.join(dir,name);
+    if(!fs.lstatSync(target).isFile())continue;
+    if(name==="creds.json" || /^(pre-key-|session-|sender-key-|app-state-sync-|app-state-sync-key-)/.test(name)){
+      fs.unlinkSync(target);removed++;
+    }
+  }
+  mainWaQr=null;
+  try{fs.unlinkSync("public/qr.json")}catch(e){if(e.code!=="ENOENT")throw e}
+  return removed;
+}
+app.post("/api/whatsapp/global/reset",requireAdmin,async(req,res)=>{
+  if(req.body?.confirmacion!=="RESTABLECER")return res.status(400).json({error:"Confirmación requerida: RESTABLECER"});
+  mainWaManuallyLoggedOut=true;clearTimeout(mainWaRetry);mainWaRetry=null;
+  const previous=sock;mainWaGeneration++;sock=null;
+  try{previous?.end?.(new Error("Restablecimiento de sesión global"))}catch{}
+  try{
+    const removed=resetGlobalAuthFiles();
+    mainWaManuallyLoggedOut=false;mainWaStatus="connecting";mainWaUpdatedAt=new Date().toISOString();
+    setImmediate(()=>iniciarWhatsApp());
+    res.json({ok:true,status:"connecting",removed});
+  }catch(error){mainWaStatus="disconnected";res.status(500).json({error:"No se pudieron restablecer las credenciales globales",detail:error.message})}
+});
 app.post("/api/whatsapp/global/reconnect",requireAdmin,async(req,res)=>{
   if(mainWaStatus==="connected")return res.status(409).json({error:"La sesión global ya está conectada. Desvinculala antes de solicitar otro QR."});
   mainWaManuallyLoggedOut=false;clearTimeout(mainWaRetry);mainWaRetry=null;
