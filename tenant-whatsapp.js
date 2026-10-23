@@ -40,7 +40,7 @@ export function createTenantWhatsApp(db) {
             del:(id)=>item.retryCounts.delete(id),
             flushAll:()=>item.retryCounts.clear()
           },
-          getMessage:async key=>item.messageCache.get(key.id)?.message
+          getMessage:async messageKey=>item.messageCache.get(messageKey.id)?.message
         });
         item.socket=socket;
         socket.ev.on("creds.update",async()=>{
@@ -50,12 +50,15 @@ export function createTenantWhatsApp(db) {
         socket.ev.on("connection.update",update=>{
           if(item.stopped||item.socket!==socket)return;
           if(update.qr){qrcode.toDataURL(update.qr).then(data=>{if(!item.stopped&&item.socket===socket){item.qr=data;item.status="qr"}}).catch(e=>console.error("Tenant QR:",e))}
-          if(update.connection==="open"){item.qr=null;item.status="conectado";item.attempt=0;item.lastError=null;}
+          if(update.connection==="open"){item.qr=null;item.status="conectado";item.attempt=0;item.lastError=null;console.log("✅ WhatsApp empresa conectado:",account.tenant_id,key);}
           if(update.connection==="close"){
             item.socket=null;item.qr=null;
             try{socket.ev.removeAllListeners("creds.update")}catch{}
             try{socket.end?.(new Error("Tenant reconnect"))}catch{}
-            const loggedOut=update.lastDisconnect?.error?.output?.statusCode===401;
+            const reason=update.lastDisconnect?.error?.output?.statusCode;
+            const loggedOut=reason===401;
+            item.lastError=loggedOut?"Sesión desvinculada (401). Reconectá esta cuenta desde Administración.":("Conexión cerrada"+(reason?" ("+reason+")":"")+". Reintentando automáticamente.");
+            console.warn("WhatsApp empresa desconectado:",account.tenant_id,key,"código:",reason,"intento:",item.attempt);
             item.status=loggedOut?"sesion_cerrada":"desconectado";
             if(loggedOut){
               // A 401 means credentials were revoked; never destroy or archive keys
@@ -140,7 +143,7 @@ export function createTenantWhatsApp(db) {
             }catch(e){console.error("Tenant incoming message error:",key,msg?.key?.id,e)}
           }
         });
-      }catch(e){item.status="error";console.error("Tenant WhatsApp startup:",e);if(!item.stopped)item.retry=setTimeout(connect,10000)}
+      }catch(e){item.status="error";item.lastError=e?.message||String(e);console.error("Tenant WhatsApp startup:",account.tenant_id,key,e);if(!item.stopped)item.retry=setTimeout(connect,10000)}
     }
     await connect();
     return item.status;
