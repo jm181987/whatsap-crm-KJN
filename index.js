@@ -932,9 +932,12 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 ======================================================== */
 let mainWaRetry=null;
 let mainWaGeneration=0;
+let mainWaStatus="disconnected";
+let mainWaUpdatedAt=new Date().toISOString();
 function scheduleMainWhatsAppRetry(delay){clearTimeout(mainWaRetry);mainWaRetry=setTimeout(()=>{mainWaRetry=null;iniciarWhatsApp()},delay)}
 async function iniciarWhatsApp() {
   const generation=++mainWaGeneration;
+  mainWaStatus="connecting";mainWaUpdatedAt=new Date().toISOString();
   try {
     const { state, saveCreds } = await useMultiFileAuthState(process.env.SESSION_DIR || "session");
     const { version } = await fetchLatestBaileysVersion();
@@ -959,7 +962,7 @@ async function iniciarWhatsApp() {
       if(generation!==mainWaGeneration || sock!==socket)return;
       const { connection, qr, lastDisconnect } = update;
 
-      if (qr) {
+      if (qr) {mainWaStatus="qr";mainWaUpdatedAt=new Date().toISOString();
         try {
           const qrData = await qrcode.toDataURL(qr);
           fs.writeFileSync("public/qr.json", JSON.stringify({ qr: qrData }));
@@ -969,7 +972,7 @@ async function iniciarWhatsApp() {
         }
       }
 
-      if (connection === "open") {
+      if (connection === "open") {mainWaStatus="connected";mainWaUpdatedAt=new Date().toISOString();
         try {
           if (fs.existsSync("public/qr.json")) fs.unlinkSync("public/qr.json");
           console.log("✅ Conectado a WhatsApp");
@@ -979,7 +982,7 @@ async function iniciarWhatsApp() {
         }
       }
 
-      if (connection === "close") {
+      if (connection === "close") {mainWaStatus="disconnected";mainWaUpdatedAt=new Date().toISOString();
         const reason = lastDisconnect?.error?.output?.statusCode;
         console.log("⚠️ Conexión cerrada:", reason);
         if (reason !== 401) {
@@ -1869,6 +1872,7 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 ======================================================== */
 
 // Endpoint QR
+app.get("/api/whatsapp/global/status",requireAdmin,(req,res)=>res.json({status:mainWaStatus,updatedAt:mainWaUpdatedAt,connected:mainWaStatus==="connected"}));
 app.get("/qr.json", requireAdmin, (req, res) => {
   try {
     if (fs.existsSync("public/qr.json")) {
