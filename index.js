@@ -2197,6 +2197,34 @@ app.post("/asistente/sugerir",async(req,res)=>{
 });
 
 // Obtener clientes
+app.post("/api/whatsapp/global/import-vcf",requireAdmin,express.text({type:["text/vcard","text/x-vcard","text/plain"],limit:"2mb"}),async(req,res)=>{
+  try{
+    const source=typeof req.body==="string"?req.body:"";
+    if(!/BEGIN:VCARD/i.test(source))return res.status(400).json({error:"Archivo VCF inválido"});
+    const cards=source.replace(/\r\n/g,"\n").replace(/\n[ \t]/g,"").split(/BEGIN:VCARD/i).slice(1);
+    if(cards.length>10000)return res.status(413).json({error:"Máximo 10.000 contactos"});
+    let matched=0,updated=0,skipped=0;
+    const seen=new Set();
+    for(const raw of cards){
+      const lines=(raw.split(/END:VCARD/i)[0]||"").split("\n");
+      const nameLine=lines.find(line=>/^FN(?:;[^:]*)?:/i.test(line));
+      const name=String(nameLine?.slice(nameLine.indexOf(":")+1)||"").replace(/\\n/gi," ").replace(/\\([,;])/g,"$1").trim();
+      if(!name||name.length>160){skipped++;continue}
+      for(const line of lines.filter(line=>/^TEL(?:;[^:]*)?:/i.test(line))){
+        const digits=String(line.slice(line.indexOf(":")+1)).replace(/\D/g,"");
+        if(digits.length<8||digits.length>15||seen.has(digits))continue;
+        seen.add(digits);
+        const rows=await db.query("SELECT numero FROM clientes WHERE regexp_replace(split_part(numero,'@',1),'[^0-9]','','g')=$1 AND EXISTS(SELECT 1 FROM mensajes m WHERE m.numero=clientes.numero)",[digits]);
+        matched+=rows.length;
+        for(const row of rows){
+          const result=await db.query("UPDATE clientes SET nombre=$1 WHERE numero=$2 AND nombre IS DISTINCT FROM $1 RETURNING numero",[name,row.numero]);
+          updated+=result.length;
+        }
+      }
+    }
+    res.json({ok:true,contacts:cards.length,matched,updated,skipped});
+  }catch(error){console.error("VCF import:",error);res.status(500).json({error:"No se pudo importar la agenda"})}
+});
 app.get("/clientes", async (req,res)=>{
   try{
     const rows=await db.query("SELECT c.* FROM clientes c WHERE EXISTS (SELECT 1 FROM mensajes m WHERE m.numero=c.numero) ORDER BY c.ultima_interaccion DESC NULLS LAST");
