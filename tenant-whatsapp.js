@@ -33,7 +33,7 @@ export function createTenantWhatsApp(db) {
         const {state,saveCreds}=await useMultiFileAuthState(dir);
         const {version}=await fetchLatestBaileysVersion();
         const socket=makeWASocket({
-          version,auth:state,printQRInTerminal:false,syncFullHistory:process.env.WA_SYNC_HISTORY==="true",
+          version,auth:state,printQRInTerminal:false,syncFullHistory:process.env.WA_SYNC_HISTORY!=="false",
           msgRetryCounterCache:{
             get:(id)=>item.retryCounts.get(id),
             set:(id,count)=>{if(item.retryCounts.size>3000)item.retryCounts.clear();item.retryCounts.set(id,count)},
@@ -70,6 +70,27 @@ export function createTenantWhatsApp(db) {
               item.status="reconectando";
               item.retry=setTimeout(connect,Math.min(60000,3000*2**(item.attempt-1)));
             }
+          }
+        });
+        // WhatsApp may send a history snapshot after pairing. Persist the chat list
+        // independently of messages so conversations without new activity are visible.
+        socket.ev.on("messaging-history.set",async history=>{
+          if(item.stopped||item.socket!==socket)return;
+          const chats=history.chats||[];
+          const contacts=history.contacts||[];
+          const messages=history.messages||[];
+          console.log("📚 Tenant history:",account.tenant_id,key,"chats:",chats.length,"contacts:",contacts.length,"messages:",messages.length);
+          for(const entry of [...chats,...contacts]){
+            const jid=String(entry.id||"");
+            if(!jid||jid==="status@broadcast"||jid.endsWith("@g.us")||(!jid.endsWith("@s.whatsapp.net")&&!jid.endsWith("@lid")))continue;
+            try{
+              await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,jid,String(entry.name||entry.notify||entry.verifiedName||"").slice(0,150)]);
+            }catch(err){console.error("Tenant history contact:",key,err)}
+          }
+          // Reuse the same deduplication, decryption and media pipeline.
+          for(let i=0;i<messages.length;i+=50){
+            if(item.stopped||item.socket!==socket)return;
+            socket.ev.emit("messages.upsert",{type:"append",messages:messages.slice(i,i+50)});
           }
         });
         socket.ev.on("messages.upsert",async event=>{
