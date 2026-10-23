@@ -3963,6 +3963,8 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <img id="knj-global-qr" alt="Código QR de la sesión global" hidden style="width:260px;max-width:100%;background:white;padding:8px;margin:auto">
       <p id="knj-global-help">Si aparece un QR, abrí WhatsApp en el teléfono, Dispositivos vinculados y Vincular dispositivo.</p>
       <button id="knj-global-refresh" type="button">Actualizar estado</button>
+      <button id="knj-global-reconnect" type="button">Generar QR / Reintentar conexión</button>
+      <p id="knj-global-diagnostic" style="font-size:12px;opacity:.8"></p>
       <button id="knj-global-logout" type="button" style="margin-left:8px;background:#a52a2a;color:white">Desvincular WhatsApp global</button>
     </div>
   </section>
@@ -3982,6 +3984,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
         const statusResponse=await fetch('/api/whatsapp/global/status?_='+Date.now(),{credentials:'same-origin',cache:'no-store'});
         if(!statusResponse.ok)throw new Error('Estado HTTP '+statusResponse.status);
         const statusData=await statusResponse.json();
+        document.getElementById('knj-global-diagnostic').textContent='Diagnóstico: '+statusData.status+' · QR: '+(statusData.hasQr?'disponible':'no generado')+' · Conexión: '+(statusData.hasSocket?'iniciada':'sin socket');
         if(data.qr){qr.src=data.qr;qr.hidden=false;qr.style.display='block';state.textContent='🟠 Esperando escaneo del QR para vincular la sesión global.';}
         else{qr.hidden=true;qr.style.display='none';qr.removeAttribute('src');state.textContent=({connected:'🟢 Conectado',connecting:'🟡 Conectando',disconnected:'🔴 Desconectado',qr:'🟠 Esperando QR'})[statusData.status]||'⚪ Estado desconocido';}
       }catch(e){state.textContent='No se pudo consultar la sesión: '+e.message;qr.hidden=true;qr.style.display='none';}
@@ -3990,6 +3993,10 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     document.getElementById('wa-nav-global-session').addEventListener('click',()=>{panel.hidden=false;panel.style.display='flex';refresh();clearInterval(timer);timer=setInterval(refresh,4000);});
     document.getElementById('knj-global-close').addEventListener('click',close);
     document.getElementById('knj-global-refresh').addEventListener('click',refresh);
+    document.getElementById('knj-global-reconnect').addEventListener('click',async()=>{
+      const btn=document.getElementById('knj-global-reconnect');btn.disabled=true;
+      try{const response=await fetch('/api/whatsapp/global/reconnect',{method:'POST',credentials:'same-origin'});const data=await response.json();if(!response.ok)throw new Error(data.error||'No se pudo reiniciar');state.textContent='🟡 Solicitando QR a WhatsApp…';setTimeout(refresh,1500)}catch(e){state.textContent='Error: '+e.message}finally{btn.disabled=false}
+    });
     document.getElementById('knj-global-logout').addEventListener('click',async()=>{
       if(!confirm('¿Desvincular el WhatsApp global? Tendrás que volver a vincularlo para usarlo. Las sesiones de las empresas no se modificarán.'))return;
       const button=document.getElementById('knj-global-logout');button.disabled=true;
