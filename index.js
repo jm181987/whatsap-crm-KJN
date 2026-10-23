@@ -1303,7 +1303,7 @@ function actualizarCliente(numero, contacto, fecha) {
       );
     } else {
       db.run(
-        `UPDATE clientes SET ultima_interaccion=?, nombre=? WHERE numero=?`,
+        `UPDATE clientes SET ultima_interaccion=?, nombre=CASE WHEN ? IS NULL OR ? = '' OR ? = 'Desconocido' OR ? = numero THEN nombre ELSE ? END WHERE numero=?`,
         [fecha, contacto, numero],
         function(err) {
           if (err) {
@@ -1351,12 +1351,30 @@ async function registrarChatsDesdeEvento(chats) {
   if(nuevos)console.log("Chats nuevos registrados:",nuevos);
 }
 function instalarSincronizacionChats(socket){
-  socket.ev.on("chats.upsert",chats=>{registrarChatsDesdeEvento(chats).catch(e=>console.error("chats.upsert:",e))});
+  const actualizarNombres=async contacts=>{
+    let updated=0;
+    for(const c of contacts||[]){
+      const numero=String(c.id||c.jid||"");
+      if(!numero||numero==="status@broadcast")continue;
+      const nombre=String(c.name||c.verifiedName||c.notify||c.pushName||"").trim();
+      if(!nombre||nombre===numero)continue;
+      try{
+        const result=await db.query("UPDATE clientes SET nombre=$1 WHERE numero=$2 AND (nombre IS NULL OR nombre='' OR nombre=numero OR nombre='Desconocido') RETURNING numero",[nombre,numero]);
+        updated+=result.length;
+      }catch(e){console.error("No se pudo actualizar nombre de WhatsApp:",numero,e.message)}
+    }
+    if(updated)console.log("Nombres de conversaciones recuperados:",updated);
+  };
+  socket.ev.on("chats.upsert",chats=>{registrarChatsDesdeEvento(chats).catch(e=>console.error("chats.upsert:",e));actualizarNombres(chats).catch(console.error)});
+  socket.ev.on("contacts.upsert",contacts=>{actualizarNombres(contacts).catch(console.error)});
+  socket.ev.on("contacts.update",contacts=>{actualizarNombres(contacts).catch(console.error)});
   socket.ev.on("messaging-history.set",event=>{
     registrarChatsDesdeEvento(event.chats||[]).catch(e=>console.error("messaging-history.set:",e));
+    actualizarNombres([...(event.chats||[]),...(event.contacts||[])]).catch(console.error);
     if(event.messages?.length)socket.ev.emit("messages.upsert",{type:"append",messages:event.messages});
   });
 }
+
 /* ========================================================
    ENDPOINTS PARA ARCHIVOS MULTIMEDIA
 ======================================================== */
