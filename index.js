@@ -935,6 +935,7 @@ let mainWaGeneration=0;
 let mainWaStatus="disconnected";
 let mainWaUpdatedAt=new Date().toISOString();
 let mainWaManuallyLoggedOut=false;
+let mainWaQr=null;
 function scheduleMainWhatsAppRetry(delay){if(mainWaManuallyLoggedOut)return;clearTimeout(mainWaRetry);mainWaRetry=setTimeout(()=>{mainWaRetry=null;iniciarWhatsApp()},delay)}
 async function iniciarWhatsApp() {
   if(mainWaManuallyLoggedOut)return;
@@ -974,7 +975,7 @@ async function iniciarWhatsApp() {
         }
       }
 
-      if (connection === "open") {mainWaStatus="connected";mainWaUpdatedAt=new Date().toISOString();
+      if (connection === "open") {mainWaQr=null;mainWaStatus="connected";mainWaUpdatedAt=new Date().toISOString();
         try {
           if (fs.existsSync("public/qr.json")) fs.unlinkSync("public/qr.json");
           console.log("✅ Conectado a WhatsApp");
@@ -984,7 +985,7 @@ async function iniciarWhatsApp() {
         }
       }
 
-      if (connection === "close") {mainWaStatus="disconnected";mainWaUpdatedAt=new Date().toISOString();
+      if (connection === "close") {mainWaQr=null;mainWaStatus="disconnected";mainWaUpdatedAt=new Date().toISOString();
         const reason = lastDisconnect?.error?.output?.statusCode;
         console.log("⚠️ Conexión cerrada:", reason);
         if (reason !== 401) {
@@ -1880,7 +1881,7 @@ app.post("/api/whatsapp/global/logout",requireAdmin,async(req,res)=>{
   mainWaManuallyLoggedOut=true;clearTimeout(mainWaRetry);mainWaRetry=null;
   const current=sock;mainWaGeneration++;sock=null;
   mainWaStatus="disconnected";mainWaUpdatedAt=new Date().toISOString();
-  try{await current.logout();try{current.end?.(new Error("Sesión global cerrada por administrador"))}catch{};try{fs.unlinkSync("public/qr.json")}catch(e){if(e.code!=="ENOENT")console.error(e)};mainWaManuallyLoggedOut=false;setTimeout(()=>iniciarWhatsApp(),1000);res.json({ok:true,status:"connecting"});}
+  try{await current.logout();try{current.end?.(new Error("Sesión global cerrada por administrador"))}catch{};mainWaQr=null;try{fs.unlinkSync("public/qr.json")}catch(e){if(e.code!=="ENOENT")console.error(e)};const sessionPath=path.resolve(process.env.SESSION_DIR || "session");const tenantPath=path.resolve(process.env.SESSION_DIR || "session","tenants");if(sessionPath===tenantPath)throw new Error("Ruta de sesión inválida");for(const name of fs.readdirSync(sessionPath)){if(name==="tenants")continue;const target=path.join(sessionPath,name);const stat=fs.lstatSync(target);if(stat.isFile() && (name==="creds.json" || name.startsWith("pre-key-") || name.startsWith("session-") || name.startsWith("sender-key-") || name.startsWith("app-state-sync-") || name.startsWith("app-state-sync-key-")))fs.unlinkSync(target)}mainWaManuallyLoggedOut=false;setTimeout(()=>iniciarWhatsApp(),1000);res.json({ok:true,status:"connecting"});}
   catch(error){mainWaManuallyLoggedOut=false;scheduleMainWhatsAppRetry(5000);res.status(500).json({error:"No se pudo desvincular WhatsApp global",detail:error.message})}
 });
 app.get("/qr.json", requireAdmin, (req, res) => {
