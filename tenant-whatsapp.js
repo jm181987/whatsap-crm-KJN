@@ -77,9 +77,10 @@ export function createTenantWhatsApp(db) {
               if(item.messageCache.size>1000)item.messageCache.delete(item.messageCache.keys().next().value);
               item.messageCache.set(msg.key.id,msg);
             }
-            if(!msg.message||msg.key.fromMe||msg.key.remoteJid==="status@broadcast")continue;
+            if(!msg.message||!msg.key?.remoteJid||msg.key.remoteJid==="status@broadcast"||msg.key.remoteJid.endsWith("@g.us"))continue;
             if(msg.message.protocolMessage||msg.message.senderKeyDistributionMessage||msg.message.reactionMessage)continue;
             const numero=msg.key.remoteJidAlt?.endsWith("@s.whatsapp.net")?msg.key.remoteJidAlt:msg.key.remoteJid;
+            const direccion=msg.key.fromMe?"enviado":"recibido";
             let content=msg.message;
             for(let depth=0;depth<5;depth++){
               const nested=content.ephemeralMessage?.message||content.viewOnceMessageV2?.message||content.viewOnceMessage?.message||content.documentWithCaptionMessage?.message||content.viewOnceMessageV2Extension?.message;
@@ -118,8 +119,8 @@ export function createTenantWhatsApp(db) {
             }
             try{
               await db.query("INSERT INTO crm_tenant_contactos(tenant_id,cuenta_id,numero,nombre) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,cuenta_id,numero) DO UPDATE SET nombre=COALESCE(NULLIF(EXCLUDED.nombre,''),crm_tenant_contactos.nombre)",[account.tenant_id,key,numero,msg.pushName||""]);
-              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre,wa_message_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING",[account.tenant_id,key,numero,texto,"recibido",mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null,msg.key?.id||null]);
-              if(msg.key?.id&&event.type==="notify"&&numero.endsWith("@s.whatsapp.net")&&!media){
+              await db.query("INSERT INTO crm_tenant_mensajes(tenant_id,cuenta_id,numero,texto,direccion,media_path,media_mime,media_nombre,wa_message_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING",[account.tenant_id,key,numero,texto,direccion,mediaPath,mediaPath?mediaMime:null,mediaPath?mediaNombre:null,msg.key?.id||null]);
+              if(!msg.key.fromMe&&msg.key?.id&&event.type==="notify"&&numero.endsWith("@s.whatsapp.net")&&!media){
                 try{
                   const rules=await db.query("SELECT id,palabra,respuesta FROM crm_tenant_automatizaciones WHERE tenant_id=$1 AND cuenta_id=$2 AND activo=TRUE ORDER BY id LIMIT 20",[account.tenant_id,key]);
                   const normalized=texto.trim().toLocaleLowerCase();
