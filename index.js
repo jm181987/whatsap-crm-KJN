@@ -934,8 +934,10 @@ let mainWaRetry=null;
 let mainWaGeneration=0;
 let mainWaStatus="disconnected";
 let mainWaUpdatedAt=new Date().toISOString();
-function scheduleMainWhatsAppRetry(delay){clearTimeout(mainWaRetry);mainWaRetry=setTimeout(()=>{mainWaRetry=null;iniciarWhatsApp()},delay)}
+let mainWaManuallyLoggedOut=false;
+function scheduleMainWhatsAppRetry(delay){if(mainWaManuallyLoggedOut)return;clearTimeout(mainWaRetry);mainWaRetry=setTimeout(()=>{mainWaRetry=null;iniciarWhatsApp()},delay)}
 async function iniciarWhatsApp() {
+  if(mainWaManuallyLoggedOut)return;
   const generation=++mainWaGeneration;
   mainWaStatus="connecting";mainWaUpdatedAt=new Date().toISOString();
   try {
@@ -1873,6 +1875,14 @@ app.post("/enviar-lista-contactos", async (req, res) => {
 
 // Endpoint QR
 app.get("/api/whatsapp/global/status",requireAdmin,(req,res)=>res.json({status:mainWaStatus,updatedAt:mainWaUpdatedAt,connected:mainWaStatus==="connected"}));
+app.post("/api/whatsapp/global/logout",requireAdmin,async(req,res)=>{
+  if(!sock)return res.status(409).json({error:"La sesión global no está activa"});
+  mainWaManuallyLoggedOut=true;clearTimeout(mainWaRetry);mainWaRetry=null;
+  const current=sock;mainWaGeneration++;sock=null;
+  mainWaStatus="disconnected";mainWaUpdatedAt=new Date().toISOString();
+  try{await current.logout();try{current.end?.(new Error("Sesión global cerrada por administrador"))}catch{};try{fs.unlinkSync("public/qr.json")}catch(e){if(e.code!=="ENOENT")console.error(e)};res.json({ok:true,status:"disconnected"});}
+  catch(error){mainWaManuallyLoggedOut=false;scheduleMainWhatsAppRetry(5000);res.status(500).json({error:"No se pudo desvincular WhatsApp global",detail:error.message})}
+});
 app.get("/qr.json", requireAdmin, (req, res) => {
   try {
     if (fs.existsSync("public/qr.json")) {
