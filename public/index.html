@@ -3960,7 +3960,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <h2>📱 Sesión WhatsApp global</h2>
       <p>Esta es la conexión principal del CRM, independiente de las cuentas de cada empresa.</p>
       <p id="knj-global-state" role="status">Consultando conexión…</p>
-      <img id="knj-global-qr" alt="Código QR de la sesión global" hidden style="width:260px;max-width:100%;background:white;padding:8px;margin:auto;display:block">
+      <img id="knj-global-qr" alt="Código QR de la sesión global" hidden style="width:260px;max-width:100%;background:white;padding:8px;margin:auto">
       <p id="knj-global-help">Si aparece un QR, abrí WhatsApp en el teléfono, Dispositivos vinculados y Vincular dispositivo.</p>
       <button id="knj-global-refresh" type="button">Actualizar estado</button>
       <button id="knj-global-logout" type="button" style="margin-left:8px;background:#a52a2a;color:white">Desvincular WhatsApp global</button>
@@ -3976,15 +3976,15 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       if(panel.hidden)return;
       try{
         const response=await fetch('/qr.json?_='+Date.now(),{credentials:'same-origin',cache:'no-store'});
-        if(response.status===401||response.status===403){state.textContent='Solo el administrador global puede consultar esta sesión.';qr.hidden=true;return;}
+        if(response.status===401||response.status===403){state.textContent='Solo el administrador global puede consultar esta sesión.';qr.hidden=true;qr.style.display='none';return;}
         if(!response.ok)throw new Error('HTTP '+response.status);
         const data=await response.json();
         const statusResponse=await fetch('/api/whatsapp/global/status?_='+Date.now(),{credentials:'same-origin',cache:'no-store'});
         if(!statusResponse.ok)throw new Error('Estado HTTP '+statusResponse.status);
         const statusData=await statusResponse.json();
-        if(data.qr){qr.src=data.qr;qr.hidden=false;state.textContent='🟠 Esperando escaneo del QR para vincular la sesión global.';}
-        else{qr.hidden=true;qr.removeAttribute('src');state.textContent=({connected:'🟢 Conectado',connecting:'🟡 Conectando',disconnected:'🔴 Desconectado',qr:'🟠 Esperando QR'})[statusData.status]||'⚪ Estado desconocido';}
-      }catch(e){state.textContent='No se pudo consultar la sesión: '+e.message;qr.hidden=true;}
+        if(data.qr){qr.src=data.qr;qr.hidden=false;qr.style.display='block';state.textContent='🟠 Esperando escaneo del QR para vincular la sesión global.';}
+        else{qr.hidden=true;qr.style.display='none';qr.removeAttribute('src');state.textContent=({connected:'🟢 Conectado',connecting:'🟡 Conectando',disconnected:'🔴 Desconectado',qr:'🟠 Esperando QR'})[statusData.status]||'⚪ Estado desconocido';}
+      }catch(e){state.textContent='No se pudo consultar la sesión: '+e.message;qr.hidden=true;qr.style.display='none';}
     }
     function close(){panel.hidden=true;panel.style.display='none';clearInterval(timer);}
     document.getElementById('wa-nav-global-session').addEventListener('click',()=>{panel.hidden=false;panel.style.display='flex';refresh();clearInterval(timer);timer=setInterval(refresh,4000);});
@@ -3993,7 +3993,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     document.getElementById('knj-global-logout').addEventListener('click',async()=>{
       if(!confirm('¿Desvincular el WhatsApp global? Tendrás que volver a vincularlo para usarlo. Las sesiones de las empresas no se modificarán.'))return;
       const button=document.getElementById('knj-global-logout');button.disabled=true;
-      try{const response=await fetch('/api/whatsapp/global/logout',{method:'POST',credentials:'same-origin'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Error al desvincular');state.textContent='🟡 Sesión desvinculada. Generando nuevo QR para vincular WhatsApp…';qr.hidden=true;setTimeout(refresh,1500);}
+      try{const response=await fetch('/api/whatsapp/global/logout',{method:'POST',credentials:'same-origin'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Error al desvincular');state.textContent='🟡 Sesión desvinculada. Generando nuevo QR para vincular WhatsApp…';qr.hidden=true;qr.style.display='none';setTimeout(refresh,1500);}
       catch(error){alert(error.message);await refresh()}finally{button.disabled=false}
     });
   })();
