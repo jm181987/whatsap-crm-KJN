@@ -1345,10 +1345,8 @@ async function registrarChatsDesdeEvento(chats) {
 }
 function instalarSincronizacionChats(socket){
   socket.ev.on("chats.upsert",chats=>{registrarChatsDesdeEvento(chats).catch(e=>console.error("chats.upsert:",e))});
-  socket.ev.on("contacts.upsert",contacts=>{registrarChatsDesdeEvento(contacts).catch(e=>console.error("contacts.upsert:",e))});
   socket.ev.on("messaging-history.set",event=>{
     registrarChatsDesdeEvento(event.chats||[]).catch(e=>console.error("messaging-history.set:",e));
-    registrarChatsDesdeEvento(event.contacts||[]).catch(e=>console.error("history contacts:",e));
   });
 }
 /* ========================================================
@@ -2175,7 +2173,7 @@ app.post("/asistente/sugerir",async(req,res)=>{
 // Obtener clientes
 app.get("/clientes", async (req,res)=>{
   try{
-    const rows=await db.query("SELECT * FROM clientes ORDER BY ultima_interaccion DESC NULLS LAST");
+    const rows=await db.query("SELECT c.* FROM clientes c WHERE EXISTS (SELECT 1 FROM mensajes m WHERE m.numero=c.numero) ORDER BY c.ultima_interaccion DESC NULLS LAST");
     const seen=new Set();
     const unique=rows.filter(row=>{
       const key=phoneKey(row.numero)||row.numero;
