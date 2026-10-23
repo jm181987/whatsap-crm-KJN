@@ -3993,7 +3993,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     document.getElementById('knj-global-logout').addEventListener('click',async()=>{
       if(!confirm('¿Desvincular el WhatsApp global? Tendrás que volver a vincularlo para usarlo. Las sesiones de las empresas no se modificarán.'))return;
       const button=document.getElementById('knj-global-logout');button.disabled=true;
-      try{const response=await fetch('/api/whatsapp/global/logout',{method:'POST',credentials:'same-origin'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Error al desvincular');state.textContent='🔴 Sesión global desvinculada. Reiniciá la conexión cuando quieras volver a vincularla.';qr.hidden=true;}
+      try{const response=await fetch('/api/whatsapp/global/logout',{method:'POST',credentials:'same-origin'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Error al desvincular');state.textContent='🟡 Sesión desvinculada. Generando nuevo QR para vincular WhatsApp…';qr.hidden=true;setTimeout(refresh,1500);}
       catch(error){alert(error.message);await refresh()}finally{button.disabled=false}
     });
   })();
