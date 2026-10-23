@@ -3965,7 +3965,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       <button id="knj-global-refresh" type="button">Actualizar estado</button>
       <button id="knj-global-reconnect" type="button">Generar QR / Reintentar conexión</button>
       <button id="knj-global-reset" type="button" style="background:#a52a2a;color:white">Restablecer sesión global (error 401)</button>
-      <p id="knj-global-diagnostic" style="font-size:12px;opacity:.8"></p>
+      <div style="margin-top:16px;padding:12px;border:1px solid #8885;border-radius:10px"><strong>Importar nombres del celular</strong><p>Seleccioná un archivo .vcf exportado de tu agenda. Solo se actualizarán nombres de conversaciones existentes.</p><input id="knj-global-vcf" type="file" accept=".vcf,text/vcard,text/x-vcard"><button id="knj-global-vcf-import" type="button">Importar nombres</button><p id="knj-global-vcf-result" role="status"></p></div><p id="knj-global-diagnostic" style="font-size:12px;opacity:.8"></p>
       <button id="knj-global-logout" type="button" style="margin-left:8px;background:#a52a2a;color:white">Desvincular WhatsApp global</button>
     </div>
   </section>
@@ -3999,6 +3999,13 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       if(confirmation!=='RESTABLECER')return;
       const button=document.getElementById('knj-global-reset');button.disabled=true;
       try{const response=await fetch('/api/whatsapp/global/reset',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmacion:confirmation})});const data=await response.json();if(!response.ok)throw new Error(data.error||'No se pudo restablecer');state.textContent='🟡 Claves globales restablecidas. Esperando nuevo QR…';setTimeout(refresh,1500)}catch(e){state.textContent='Error: '+e.message}finally{button.disabled=false}
+    });
+    document.getElementById('knj-global-vcf-import').addEventListener('click',async()=>{
+      const file=document.getElementById('knj-global-vcf').files[0];const result=document.getElementById('knj-global-vcf-result');
+      if(!file){result.textContent='Seleccioná un archivo .vcf';return}
+      if(file.size>2*1024*1024){result.textContent='El archivo supera 2 MB';return}
+      const button=document.getElementById('knj-global-vcf-import');button.disabled=true;result.textContent='Importando nombres…';
+      try{const response=await fetch('/api/whatsapp/global/import-vcf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'text/vcard'},body:await file.text()});const data=await response.json();if(!response.ok)throw new Error(data.error||'Error de importación');result.textContent='Agenda procesada: '+data.contacts+' contactos · coincidencias: '+data.matched+' · nombres actualizados: '+data.updated+'. Actualizá la bandeja para verlos.'}catch(error){result.textContent='Error: '+error.message}finally{button.disabled=false}
     });
     document.getElementById('knj-global-reconnect').addEventListener('click',async()=>{
       const btn=document.getElementById('knj-global-reconnect');btn.disabled=true;
