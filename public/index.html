@@ -968,6 +968,7 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     
     <button type="button" id="wa-nav-dash" title="Panel de actividad" aria-label="Panel de actividad">📊</button>
     <button type="button" id="wa-nav-companies" title="Bandejas de empresas" aria-label="Bandejas de empresas">🏢</button>
+    <button type="button" id="wa-nav-global-session" title="Sesión WhatsApp global" aria-label="Sesión WhatsApp global">📱</button>
     <button type="button" id="wa-nav-admin" title="Administración" aria-label="Administración" hidden>🛡️</button>
     <button type="button" id="wa-nav-pending" title="Pendientes" aria-label="Mensajes pendientes">🔔</button>
     <button type="button" id="wa-nav-theme" title="Cambiar tema" aria-label="Cambiar tema">🌓</button>
@@ -3953,5 +3954,40 @@ header > div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   <footer id="crm-footer">
     <p>Creado por <strong>Jorge Márquez</strong></p>
   </footer>
+
+  <section id="knj-global-session" hidden style="position:fixed;z-index:9999;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--wa-panel,#fff);color:var(--wa-text,#222);border-radius:16px;padding:24px;max-width:440px;width:100%;max-height:90vh;overflow:auto">
+      <button id="knj-global-close" type="button" style="float:right">✕ Cerrar</button>
+      <h2>📱 Sesión WhatsApp global</h2>
+      <p>Esta es la conexión principal del CRM, independiente de las cuentas de cada empresa.</p>
+      <p id="knj-global-state" role="status">Consultando conexión…</p>
+      <img id="knj-global-qr" alt="Código QR de la sesión global" hidden style="width:260px;max-width:100%;background:white;padding:8px;margin:auto;display:block">
+      <p id="knj-global-help">Si aparece un QR, abrí WhatsApp en el teléfono, Dispositivos vinculados y Vincular dispositivo.</p>
+      <button id="knj-global-refresh" type="button">Actualizar estado</button>
+    </div>
+  </section>
+  <script>
+  (()=>{
+    const panel=document.getElementById('knj-global-session');
+    const qr=document.getElementById('knj-global-qr');
+    const state=document.getElementById('knj-global-state');
+    let timer;
+    async function refresh(){
+      if(panel.hidden)return;
+      try{
+        const response=await fetch('/qr.json?_='+Date.now(),{credentials:'same-origin',cache:'no-store'});
+        if(response.status===401||response.status===403){state.textContent='Solo el administrador global puede consultar esta sesión.';qr.hidden=true;return;}
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        const data=await response.json();
+        if(data.qr){qr.src=data.qr;qr.hidden=false;state.textContent='Esperando escaneo del QR para vincular la sesión global.';}
+        else{qr.hidden=true;qr.removeAttribute('src');state.textContent='No hay QR pendiente. La sesión puede estar conectada o iniciándose; comprobá el estado en la bandeja principal.';}
+      }catch(e){state.textContent='No se pudo consultar la sesión: '+e.message;qr.hidden=true;}
+    }
+    function close(){panel.hidden=true;panel.style.display='none';clearInterval(timer);}
+    document.getElementById('wa-nav-global-session').addEventListener('click',()=>{panel.hidden=false;panel.style.display='flex';refresh();clearInterval(timer);timer=setInterval(refresh,4000);});
+    document.getElementById('knj-global-close').addEventListener('click',close);
+    document.getElementById('knj-global-refresh').addEventListener('click',refresh);
+  })();
+  </script>
 </body>
 </html>
