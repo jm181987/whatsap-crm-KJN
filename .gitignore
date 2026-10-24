@@ -5,3 +5,14 @@ node_modules/
 crm.db*
 auth/
 session/
+sessions/
+public/audios/*
+public/imagenes/*
+public/archivos/*
+public/videos/*
+!public/audios/.gitkeep
+!public/imagenes/.gitkeep
+!public/archivos/.gitkeep
+!public/videos/.gitkeep
+*.log
+npm-debug.log*
